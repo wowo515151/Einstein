@@ -48,3 +48,5 @@ See the runnable [flat-space geodesic example](examples.md#geodesic-initial-valu
 Finite-difference quotients use scaled subtraction if the difference between finite samples overflows, and reject an unrepresentable derivative. Boundary shooting also divides its numerical endpoint Jacobian by the actual tangent perturbation spacing and rejects perturbations that collapse at large tangent magnitudes. Always check step-size convergence against analytic cases before using curved-space outputs.
 
 When the initial geodesic event is an `Event4`, sample events retain its frame and `c`, including after boundary shooting. Component-format histories contain coordinate arrays without event metadata.
+
+Metric callbacks used by geometry operations must return one 4×4 metric for each point. A returned `Metric4` is checked against its constructed batch shape before use; construct a new metric if its batch shape needs to change.

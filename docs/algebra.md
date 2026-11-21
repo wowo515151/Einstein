@@ -92,3 +92,7 @@ Construct Lorentz maps with `identity`, `boost(beta)`, `fromRapidity(rapidity,di
 | `P.compose(other)`, `P.inverse()` | A new affine transform; composition applies `other` first. |
 
 For raw rank-two input, `applyTensor` uses the Lorentz inverse convention `ηLᵀη` for lower indices, as Lib4 does. The constructor does not validate a matrix unless requested, so call `validate()` when accepting an external transform; the inverse convention assumes a Lorentz matrix. The `Tensor4` input extension delegates to the general tensor transformation, which requires an invertible matrix.
+
+`Matrix4` derives batch dimensions from its current component arrays for each operation. If callers reshape mutable components, they must remain rectangular with trailing 4×4 dimensions and within the documented bounds.
+
+`Metric4` retains its constructed batch shape: reshaping its mutable component arrays is rejected by metric-aware algebra operations. Construct a new metric for a different batch shape.

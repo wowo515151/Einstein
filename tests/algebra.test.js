@@ -273,6 +273,22 @@ test("bivector contraction and Hodge dual use custom Lorentz metrics",()=>{
   const twice=field.dual(metric).dual(metric).components;
   for(let i=0;i<4;i++)for(let j=0;j<4;j++)assert.ok(Math.abs(twice[i][j]+field.components[i][j])<1e-12);
 });
+test("metric operations reject changed mutable batch dimensions consistently",()=>{
+  const metric=Metric4.minkowski({batchShape:[2]}),vector=new Vector4([1,0,0,0]),field=new Bivector4([[0,1,0,0],[-1,0,0,0],[0,0,0,0],[0,0,0,0]]);
+  metric.components.push(Metric4.minkowski().components);
+  for(const operation of [()=>metric.dot(vector,vector),()=>metric.determinant(),()=>metric.lowerIndex(vector),()=>metric.inverseMetric(),()=>vector.dot(vector,metric),()=>field.dual(metric),()=>field.invariants(metric),()=>new LeviCivita4(metric).epsilon()])
+    assert.throws(operation,/metric batch shape cannot change/);
+});
+test("matrix operations derive batch dimensions from current mutable components",()=>{
+  const matrix=Matrix4.identity({batchShape:[2]}),identity=Matrix4.identity();
+  matrix.components.push(identity.components);
+  assert.deepEqual(matrix.batchShape,[3]);assert.equal(matrix.batchRank,1);
+  assert.equal(matrix.add(identity).components.length,3);assert.equal(matrix.multiply(identity).components.length,3);
+  assert.equal(matrix.apply([1,0,0,0]).components.length,3);assert.equal(matrix.transpose().components.length,3);
+  assert.deepEqual(matrix.determinant(),[1,1,1]);assert.equal(matrix.inverse().components.length,3);
+  matrix.components[2][0][0]=2;assert.deepEqual(matrix.determinant(),[1,1,2]);
+  matrix.components[2][0].pop();assert.throws(()=>matrix.determinant(),/shape|rectangular|components/i);
+});
 test("bivector double dual follows signature for non-diagonal metrics",()=>{
   const metrics=new Metric4([
     [[-2,.5,0,0],[.5,2,.25,0],[0,.25,3,0],[0,0,0,4]],

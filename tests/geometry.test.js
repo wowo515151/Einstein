@@ -3,6 +3,13 @@ import assert from "node:assert/strict";
 import {Connection4,Curvature4,DifferentialOperators4,Geodesic4,Metric4,Event4} from "../src/relativity/index.js";
 const flat=()=>new Metric4().components;
 
+test("geometry rejects reshaped Metric4 components before use",()=>{
+  const metric=Metric4.minkowski(),components=metric.components;
+  metric.components=[components,components];
+  const point=[0,0,0,0],twoForm=[[0,1,0,0],[-1,0,0,0],[0,0,0,0],[0,0,0,0]];
+  for(const operation of [()=>new DifferentialOperators4(metric).hodgeDual(twoForm),()=>new Connection4(()=>metric).christoffel(point),()=>new Curvature4(()=>metric).ricciScalar(point),()=>new Curvature4(()=>metric).einsteinTensor(point),()=>new Curvature4(()=>metric).kretschmannScalar(point)])
+    assert.throws(operation,/metric batch shape cannot change/);
+});
 test("exterior derivative of a three-form has the analytic four-form orientation",()=>{
   const parity=indices=>{
     if(new Set(indices).size!==indices.length)return 0;

@@ -2,6 +2,7 @@ import {C,vector,matrix,zeros,identity,transpose,mmul,mvec,inverse,determinantRo
 import {Metric4,LorentzTransform} from "./algebra.js";
 import {Event4,integrateRK4} from "./spacetime.js";
 
+function geometryMetric(value){return matrix(value instanceof Metric4?value._checkedComponents().data:value);}
 function differenceStencil(point,axis,step){const plus=point.slice(),minus=point.slice();plus[axis]+=step;minus[axis]-=step;const span=plus[axis]-minus[axis];if(!Number.isFinite(span)||!(plus[axis]>point[axis])||!(minus[axis]<point[axis]))throw new RangeError("finite-difference step must produce distinct finite stencil points");return {plus,minus,span};}
 function differenceQuotient(plus,minus,span){const delta=plus-minus,result=Number.isFinite(delta)?delta/span:plus/span-minus/span;if(!Number.isFinite(result))throw new RangeError("finite-difference derivative is non-finite");return result;}
 function partial(fn,x,axis,h=1e-5){const {plus:xp,minus:xm,span}=differenceStencil(x,axis,h);const plus=fn(xp),minus=fn(xm);if(!Number.isFinite(plus)||!Number.isFinite(minus))throw new TypeError("scalar field samples must be finite");return differenceQuotient(plus,minus,span);}
@@ -25,7 +26,7 @@ function eachShapeIndex(shape,visit,prefix=[]){if(prefix.length===shape.length){
 
 export class DifferentialOperators4 {
   constructor(metric=null,{step=1e-5}={}){this.metric=metric;this.step=validateDifferenceStep(step);this.connection=new Connection4(x=>this._g(x),{step:this.step});}
-  _g(x){const g=typeof this.metric==="function"?this.metric(x):(this.metric??new Metric4().components);return g instanceof Metric4?g.components:matrix(g);}
+  _g(x){const g=typeof this.metric==="function"?this.metric(x):(this.metric??new Metric4().components);return geometryMetric(g);}
   _mapPoints(x,operation,workPerPoint=1){const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),batchCount=batchShape.reduce((count,size)=>count*size,1),firstIndex=Array(batchShape.length).fill(0);if(typeof workPerPoint==="number"&&batchCount*workPerPoint>MAX_DIFFERENTIAL_BATCH_WORK)throw new RangeError("differential-operator batch exceeds the bounded work limit");const firstPoint=geometryBatchGet(parsed.data,batchShape,firstIndex,batchShape),firstValue=operation(firstPoint),shape=numericTreeShape(firstValue),components=shape.reduce((count,size)=>count*size,1);if(batchCount*components>MAX_COVARIANT_COMPONENTS)throw new RangeError("differential-operator batch exceeds the bounded component limit");if(typeof workPerPoint==="function"&&batchCount*workPerPoint(firstValue,components)>MAX_DIFFERENTIAL_BATCH_WORK)throw new RangeError("differential-operator batch exceeds the bounded work limit");if(!batchShape.length)return firstValue;return geometryBuildBatch(batchShape,index=>{if(index.every((value,axis)=>value===firstIndex[axis]))return firstValue;const result=operation(geometryBatchGet(parsed.data,batchShape,index,batchShape));if(JSON.stringify(numericTreeShape(result))!==JSON.stringify(shape))throw new RangeError("field result shape must remain constant across batch samples");return result;});}
   partial(fn,x){return this._mapPoints(x,p=>this._jacobianScalar(fn,p),(_value,components)=>3*components);}
   _partialScalar(fn,p){return Array.from({length:4},(_,i)=>partial(fn,p,i,this.step));}
@@ -88,7 +89,7 @@ function LeviCivitaTensor(g){const root=-determinantRoot(g).root,symbol=(()=>{co
 
 export class Connection4 {
   constructor(metric,{step=1e-5}={}){this.metric=metric;this.step=validateDifferenceStep(step);}
-  _g(x){const g=this.metric(x);return g instanceof Metric4?g.components:matrix(g);}
+  _g(x){const g=this.metric(x);return geometryMetric(g);}
   christoffel(x){const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),components=batchShape.reduce((count,size)=>count*size,1)*64;if(components>MAX_COVARIANT_COMPONENTS)throw new RangeError("Christoffel batch exceeds the component limit");return geometryBuildBatch(batchShape,index=>this._christoffelScalar(geometryBatchGet(parsed.data,batchShape,index,batchShape)));}
   _christoffelScalar(p){const g=this._g(p),gi=inverse(g),dg=Array.from({length:4},(_,k)=>{const {plus:xp,minus:xm,span}=differenceStencil(p,k,this.step);const a=this._g(xp),b=this._g(xm);return a.map((r,i)=>r.map((v,j)=>differenceQuotient(v,b[i][j],span)));}),out=zeros(4).map(()=>zeros(4));for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)out[a][b][c]+=.5*gi[a][d]*(dg[b][d][c]+dg[c][d][b]-dg[d][b][c]);if(out.some(plane=>plane.some(row=>row.some(value=>!Number.isFinite(value)))))throw new RangeError("Christoffel symbols are non-finite");return out;}
   covariantDerivativeVector(field,x){return this.covariantDerivative(field,x,["up"]);}
@@ -168,9 +169,9 @@ export class Curvature4 {
   }
   ricci(x){return this._mapPoints(x,16,point=>this._ricciTensorScalar(point));}
   _ricciTensorScalar(point){const R=this._riemannScalar(point),out=zeros(4);for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)out[a][b]+=R[c][a][c][b];return out;}
-  ricciScalar(x){return this._mapPoints(x,1,point=>{const raw=this.metric(point),g=inverse(raw instanceof Metric4?raw.components:matrix(raw)),r=this._ricciTensorScalar(point);let scalar=0;for(let a=0;a<4;a++)for(let b=0;b<4;b++)scalar+=g[a][b]*r[a][b];return scalar;});}
-  einsteinTensor(x){return this._mapPoints(x,16,point=>{const r=this._ricciTensorScalar(point),raw=this.metric(point),g=raw instanceof Metric4?raw.components:matrix(raw),inverseMetric=inverse(g);let scalar=0;for(let a=0;a<4;a++)for(let b=0;b<4;b++)scalar+=inverseMetric[a][b]*r[a][b];return r.map((row,i)=>row.map((value,j)=>value-.5*g[i][j]*scalar));});}
-  kretschmannScalar(x){return this._mapPoints(x,1,point=>{const R=this._riemannScalar(point),raw=this.metric(point),g=raw instanceof Metric4?raw.components:matrix(raw),gi=inverse(g),lower=zeros(4).map(()=>zeros(4).map(()=>zeros(4).map(()=>Array(4).fill(0))));for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)for(let e=0;e<4;e++)lower[a][b][c][d]+=g[a][e]*R[e][b][c][d];let sum=0;for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)for(let A=0;A<4;A++)for(let B=0;B<4;B++)for(let Cc=0;Cc<4;Cc++)for(let D=0;D<4;D++)sum+=gi[a][A]*gi[b][B]*gi[c][Cc]*gi[d][D]*lower[a][b][c][d]*lower[A][B][Cc][D];return sum;},70_000);}
+  ricciScalar(x){return this._mapPoints(x,1,point=>{const raw=this.metric(point),g=inverse(geometryMetric(raw)),r=this._ricciTensorScalar(point);let scalar=0;for(let a=0;a<4;a++)for(let b=0;b<4;b++)scalar+=g[a][b]*r[a][b];return scalar;});}
+  einsteinTensor(x){return this._mapPoints(x,16,point=>{const r=this._ricciTensorScalar(point),raw=this.metric(point),g=geometryMetric(raw),inverseMetric=inverse(g);let scalar=0;for(let a=0;a<4;a++)for(let b=0;b<4;b++)scalar+=inverseMetric[a][b]*r[a][b];return r.map((row,i)=>row.map((value,j)=>value-.5*g[i][j]*scalar));});}
+  kretschmannScalar(x){return this._mapPoints(x,1,point=>{const R=this._riemannScalar(point),raw=this.metric(point),g=geometryMetric(raw),gi=inverse(g),lower=zeros(4).map(()=>zeros(4).map(()=>zeros(4).map(()=>Array(4).fill(0))));for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)for(let e=0;e<4;e++)lower[a][b][c][d]+=g[a][e]*R[e][b][c][d];let sum=0;for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)for(let A=0;A<4;A++)for(let B=0;B<4;B++)for(let Cc=0;Cc<4;Cc++)for(let D=0;D<4;D++)sum+=gi[a][A]*gi[b][B]*gi[c][Cc]*gi[d][D]*lower[a][b][c][d]*lower[A][B][Cc][D];return sum;},70_000);}
 }
 
 export class Geodesic4 {
