@@ -6,6 +6,16 @@ import { LorentzTransform, Vector4, samplePlaneWaveBatch } from "../src/relativi
 import { updateViewer } from "./viewer-update.js";
 import { distinctPathPoints, twinPathColor } from "./path-points.js";
 
+test("stale viewer failures do not overwrite newer update status",async()=>{
+  const pending=[],reports=[],viewer={update:()=>new Promise((resolve,reject)=>pending.push({resolve,reject}))};
+  const first=updateViewer(viewer,{}, {isClosed:()=>false,report:error=>reports.push(error.message)});
+  const second=updateViewer(viewer,{}, {isClosed:()=>false,report:error=>reports.push(error.message)});
+  pending[1].resolve();await second;pending[0].reject(new Error("stale"));await first;assert.deepEqual(reports,[]);
+  const latest=updateViewer(viewer,{}, {isClosed:()=>false,report:error=>reports.push(error.message)});
+  pending[2].reject(new Error("current"));await latest;assert.deepEqual(reports,["current"]);
+  await updateViewer({update(){throw new Error("synchronous");}}, {}, {isClosed:()=>false,report:error=>reports.push(error.message)});
+  assert.deepEqual(reports,["current","synchronous"]);
+});
 test("curvature embedding approaches flat space at extreme finite distances",()=>{
   for(const beta of [0,.8])for(const [x,z] of [[1e200,0],[0,-1e200],[1e308,1e308]])
     assert.deepEqual(curvatureEmbeddingValues(beta,x,z),{radialMetric:1,gaussianCurvature:0});
