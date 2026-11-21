@@ -35,3 +35,5 @@ The weak-field lensing scene integrates null geodesics using explicit forward me
 The sample inspector labels rendered coordinates as display coordinates. Where supplied by a scene, it also reports physical coordinate time and, for the twin worldlines, physical x and clock proper time; the twin scene’s display offsets and illustrative depth do not change those physical values. Lensing ray samples include their metric tangent norm as a numerical diagnostic.
 
 For supported spacetime samples, the inspector also reports the squared interval from the origin and the library’s vector classification. The `null` vector classification includes the zero vector at the cone apex; the scene’s causal readout separately calls that event coincident.
+
+Field-explorer surface samples expose the physical slice event `(ct,x,0,z)` and its electric and magnetic fields in the sample inspector. The displayed surface height remains a scaled electric-field amplitude, not the event’s y coordinate.

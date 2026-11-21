@@ -303,7 +303,10 @@ function scenePoints(sceneId, time, beta, observerFrame = "lab") {
     const fieldsByZ = new Map();
     const fieldAt = z => { if (!fieldsByZ.has(z)) fieldsByZ.set(z, planeWaveState(beta, time, z)); return fieldsByZ.get(z); };
     const slice = (_x, z) => .45 * fieldAt(z).electric[0];
-    const rows = gridPoints(2, 16, slice);
+    const rows = gridPoints(2, 16, slice).map(row=>{
+      const field=fieldAt(row.z);
+      return {...row,ct:field.ct,physicalPosition:[row.x,0,row.z],electricField:field.electric.slice(),magneticField:field.magnetic.slice()};
+    });
     const positions = [-2, -2 / 3, 2 / 3, 2];
     for (let i = 0; i < positions.length; i++) for (let j = 0; j < positions.length; j++) {
       const x = positions[i], z = positions[j], y = slice(x, z);

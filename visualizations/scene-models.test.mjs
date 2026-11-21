@@ -476,3 +476,11 @@ test("twin worldline samples carry physical event and clock values",()=>{
   const beta=.6,rows=buildSceneData("twins",{beta,time:1});
   for(const row of rows){const ct=row.ct,expectedX=row.label.startsWith("stay-home")?0:(ct<=2?beta*ct:beta*(4-ct));assert.ok(Math.abs(row.worldlineX-expectedX)<1e-14);assert.ok(Math.abs(row.properTime-ct*(row.label.startsWith("stay-home")?1:.8))<1e-14);}
 });
+
+
+test("field explorer grid samples retain physical event and electromagnetic values",()=>{
+  const beta=.4,time=.3,rows=buildSceneData("field-slices",{beta,time}),row=rows[0],field=planeWaveState(beta,time,row.z);
+  assert.equal(row.ct,field.ct);assert.deepEqual(row.physicalPosition,[row.x,0,row.z]);assert.deepEqual(row.electricField,field.electric);assert.deepEqual(row.magneticField,field.magnetic);
+  assert.equal(row.y,.45*field.electric[0]);
+  row.electricField[0]=99;assert.notEqual(buildSceneData("field-slices",{beta,time})[0].electricField[0],99);
+});

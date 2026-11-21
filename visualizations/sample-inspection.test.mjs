@@ -24,3 +24,10 @@ test("sample inspector reports library causal types and squared intervals",()=>{
   const surface=describeSample(buildSceneData("light-cone",{time:.5}),1);assert.match(surface,/Vector classification: null/);
   assert.doesNotMatch(describeSample([{id:"bad",x:0,y:0,z:0,causalType:99}],1),/Vector classification/);
 });
+
+
+test("field sample readout separates physical slice position from display height",()=>{
+  const row=buildSceneData("field-slices",{beta:.4,time:.3})[0],message=describeSample([row],1);
+  assert.match(message,/Coordinate time ct:/);assert.match(message,/Physical slice position: \(-2\.000, 0\.000, -2\.000\)/);
+  assert.match(message,/Electric field: \(.*\)/);assert.match(message,/Magnetic field: \(.*\)/);
+});

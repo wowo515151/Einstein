@@ -8,6 +8,11 @@ export function describeSample(rows, number) {
   if(Number.isFinite(row.ct))details.push(`Coordinate time ct: ${row.ct.toFixed(3)}`);
   if(Number.isFinite(row.worldlineX))details.push(`Worldline x: ${row.worldlineX.toFixed(3)}`);
   if(Number.isFinite(row.properTime))details.push(`Clock proper time: ${row.properTime.toFixed(3)}`);
+  const vectorText=value=>Array.isArray(value)&&value.length===3&&value.every(Number.isFinite)?`(${value.map(component=>component.toFixed(3)).join(", ")})`:null;
+  const position=vectorText(row.physicalPosition),electric=vectorText(row.electricField),magnetic=vectorText(row.magneticField);
+  if(position)details.push(`Physical slice position: ${position}`);
+  if(electric)details.push(`Electric field: ${electric}`);
+  if(magnetic)details.push(`Magnetic field: ${magnetic}`);
   if(Number.isFinite(row.intervalSquared))details.push(`Squared interval from origin: ${row.intervalSquared.toExponential(3)}`);
   const causalNames=new Map([[Vector4.CAUSAL_TIMELIKE,"timelike"],[Vector4.CAUSAL_NULL,"null"],[Vector4.CAUSAL_SPACELIKE,"spacelike"]]);
   if(causalNames.has(row.causalType))details.push(`Vector classification: ${causalNames.get(row.causalType)}`);
