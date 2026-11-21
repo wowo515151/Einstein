@@ -9,7 +9,7 @@ import { updateViewer } from "./viewer-update.js";
 import { distinctPathPoints, twinPathColor } from "./path-points.js";
 import { createOverlayScope, replaceOverlay } from "./overlay-scope.js";
 import { moveCameraWithKey } from "./camera-keyboard.js";
-import { describeSample, describeDisplayedSample } from "./sample-inspection.js";
+import { describeSample, describeDisplayedSample, sampleMatchesDisplayed } from "./sample-inspection.js";
 
 const byId = (id) => document.getElementById(id);
 const sceneList = byId("scene-list");
@@ -417,7 +417,7 @@ async function mountScene() {
           const index = currentRows.findIndex(row => row.id === selection.id);
           stopAnimation();
           const displayed = selection.values, current = currentRows[index];
-          if (!current || ["x", "y", "z"].some(axis => current[axis] !== displayed[axis]) || String(current.label ?? current.id) !== String(displayed.label ?? displayed.id)) {
+          if (!sampleMatchesDisplayed(displayed, current)) {
             byId("selection-readout").textContent = describeDisplayedSample(displayed);
             return;
           }

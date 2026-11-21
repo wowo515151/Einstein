@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { describeSample } from "./sample-inspection.js";
+import { describeSample, sampleMatchesDisplayed } from "./sample-inspection.js";
 import { buildSceneData } from "./scene-models.js";
 
 test("sample inspector describes the requested scene sample and rejects invalid indexes",()=>{
@@ -30,4 +30,14 @@ test("field sample readout separates physical slice position from display height
   const row=buildSceneData("field-slices",{beta:.4,time:.3})[0],message=describeSample([row],1);
   assert.match(message,/Coordinate time ct:/);assert.match(message,/Physical slice position: \(-2\.000, 0\.000, -2\.000\)/);
   assert.match(message,/Electric field: \(.*\)/);assert.match(message,/Magnetic field: \(.*\)/);
+});
+
+
+test("retained points must match physical values as well as display coordinates",()=>{
+  const displayed={id:"grid-1",x:1,y:2,z:3,ct:0,physicalPosition:[1,0,3],electricField:[1,0,0],magneticField:[0,1,0]};
+  assert.equal(sampleMatchesDisplayed(displayed,{...displayed,electricField:[1,0,0]}),true);
+  assert.equal(sampleMatchesDisplayed(displayed,{...displayed,ct:1}),false);
+  assert.equal(sampleMatchesDisplayed(displayed,{...displayed,electricField:[-1,0,0]}),false);
+  assert.equal(sampleMatchesDisplayed(displayed,{...displayed,id:"other"}),false);
+  assert.equal(sampleMatchesDisplayed(displayed,null),false);
 });

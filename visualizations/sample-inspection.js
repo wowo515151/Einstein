@@ -1,5 +1,17 @@
 import {Vector4} from "../src/algebra.js";
 
+/** Check every value displayed by the inspector before treating a retained point as current. */
+export function sampleMatchesDisplayed(displayed,current){
+  if(!displayed||!current||String(displayed.id)!==String(current.id)||String(displayed.label??displayed.id)!==String(current.label??current.id))return false;
+  const scalars=["x","y","z","ct","worldlineX","properTime","metricNorm","intervalSquared","causalType"];
+  if(scalars.some(key=>!Object.is(displayed[key],current[key])))return false;
+  return ["physicalPosition","electricField","magneticField"].every(key=>{
+    const a=displayed[key],b=current[key];
+    if(a===undefined&&b===undefined)return true;
+    return Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((value,index)=>Object.is(value,b[index]));
+  });
+}
+
 /** Format one displayed sample, using the same normalized coordinates as the scene. */
 export function describeSample(rows, number) {
   if (!Number.isInteger(number) || number < 1 || number > rows.length) throw new RangeError(`Choose a sample from 1 to ${rows.length}.`);
