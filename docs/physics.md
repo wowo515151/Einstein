@@ -60,3 +60,7 @@ For physically meaningful stress-energy calculations, supply a symmetric, nonsin
 Electric-field extraction and Lorentz force reject non-finite outputs. Lorentz force uses scaled four-term products to retain representable results when naive intermediate multiplication overflows. Batched regression checks that four-force is orthogonal to four-velocity. Metric4 inputs to stress-energy calculations must retain their constructed batch shape.
 
 The electromagnetic dual accepts tensors admitted by the electromagnetic constructor’s relative antisymmetry tolerance; the antisymmetric contraction determines the result.
+
+Four-current charge-density and spatial-current extraction validate the current component arrays; charge density rejects an unrepresentable non-finite result.
+
+Four-momentum and four-velocity accessors validate mutable component arrays; energy and gamma reject non-finite outputs.

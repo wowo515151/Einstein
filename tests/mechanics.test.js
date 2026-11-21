@@ -152,6 +152,21 @@ test("electromagnetic dual accepts the constructor's relative antisymmetry toler
   assert.ok(Math.abs(dual[2][3]-expected)<1e-9);assert.equal(dual[3][2],-dual[2][3]);
   assert.equal(field.dual({orientation:-1}).components[2][3],-dual[2][3]);
 });
+test("four-momentum and four-velocity accessors validate mutable data and outputs",()=>{
+  assert.throws(()=>new FourMomentum([1e308,0,0,0],{c:2}).energy(),/energy is non-finite/);
+  assert.throws(()=>new FourVelocity([1,0,0,0],{c:1e-309}).gamma(),/gamma is non-finite/);
+  const momentum=new FourMomentum([1,2,3,4],{c:1});momentum.components[1]=Infinity;
+  for(const operation of [()=>momentum.energy(),()=>momentum.momentum3(),()=>momentum.invariantMass()])assert.throws(operation,/finite/);
+  const velocity=new FourVelocity([1,0,0,0],{c:1});velocity.components.pop();
+  for(const operation of [()=>velocity.gamma(),()=>velocity.toVelocity3(),()=>velocity.validate()])assert.throws(operation,/shape|dimension|four-velocity/i);
+});
+test("four-current extraction validates mutable components and finite density",()=>{
+  const tinyC=new FourCurrent([1,2,3,4],{c:1e-309});assert.throws(()=>tinyC.chargeDensity(),/charge density is non-finite/);
+  const current=new FourCurrent([[1,2,3,4],[2,3,4,5]],{c:1});current.components[1][1]=Infinity;
+  assert.throws(()=>current.chargeDensity(),/finite/);assert.throws(()=>current.spatialCurrent(),/finite/);
+  const malformed=new FourCurrent([1,2,3,4],{c:1});malformed.components.pop();
+  assert.throws(()=>malformed.spatialCurrent(),/shape|dimension|component/i);
+});
 test("batched electromagnetic four-forces are orthogonal to four-velocity",()=>{
   const field=EMFieldTensor.fromEB([[1,.2,-.3],[-.2,.7,.1]],[[.4,-.3,.5],[.6,.1,-.2]],{c:1});
   const velocity=FourVelocity.fromVelocity3([[.2,.1,0],[-.1,.3,.2]],1).components,covariant=velocity.map(row=>[-row[0],...row.slice(1)]);
