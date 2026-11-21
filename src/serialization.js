@@ -1,12 +1,22 @@
 // Explicit, versioned JSON interchange for finite value objects.
 import {Vector4,Covector4,Matrix4,Metric4,Tensor4,Bivector4,LeviCivita4,LorentzTransform,PoincareTransform} from "./algebra.js";
 import {FourVelocity,FourMomentum,FourCurrent,EMFieldTensor,MaxwellEquations} from "./mechanics.js";
-import {Event4,SpacetimeInterval,LightCone,InertialFrame} from "./spacetime.js";
+import {Event4,SpacetimeInterval,LightCone,SpatialSlice,InertialFrame,WorldlineSegment,Worldline} from "./spacetime.js";
 
 function eventFromData(data){
   if(!data||typeof data!=="object"||Array.isArray(data)||Object.keys(data).length!==3||!["position","frame","c"].every(key=>Object.hasOwn(data,key)))throw new TypeError("invalid serialized event fields");
   if(data.frame!==null&&typeof data.frame!=="string")throw new TypeError("event frame must be null or a string for serialization");
   return new Event4(data.position,data.frame,data.c);
+}
+
+function segmentFromData(data){
+  const keys=["start","end","u0","u1","span"];
+  if(!data||typeof data!=="object"||Array.isArray(data)||Object.keys(data).length!==keys.length||!keys.every(key=>Object.hasOwn(data,key)))throw new TypeError("invalid serialized worldline segment fields");
+  return new WorldlineSegment(eventFromData(data.start),eventFromData(data.end),data.u0,data.u1,data.span);
+}
+function worldlineFromData(data){
+  if(!Array.isArray(data.segments)||data.segments.length<1||data.segments.length>65536)throw new RangeError("serialized worldline must have 1 to 65536 segments");
+  return new Worldline(data.segments.map(segmentFromData));
 }
 
 const formats = [
@@ -22,6 +32,9 @@ const formats = [
   ["Event4",Event4,["position","frame","c"], eventFromData],
   ["SpacetimeInterval",SpacetimeInterval,["displacement","c","atol"], data=>new SpacetimeInterval(data.displacement,{c:data.c,atol:data.atol})],
   ["LightCone",LightCone,["apex","branch","c","atol"], data=>new LightCone(eventFromData(data.apex),{branch:data.branch,c:data.c,atol:data.atol})],
+  ["SpatialSlice",SpatialSlice,["origin","normal","basis","c","atol"], data=>new SpatialSlice(eventFromData(data.origin),data.normal,{basis:data.basis,c:data.c,atol:data.atol}), value=>{value._validateShape();return {origin:new Event4(value.originPosition,value.originFrame,value.originC),normal:value.normal,basis:value.basis,c:value.c,atol:value.atol};}],
+  ["WorldlineSegment",WorldlineSegment,["start","end","u0","u1","span"],segmentFromData],
+  ["Worldline",Worldline,["segments"],worldlineFromData],
   ["InertialFrame",InertialFrame,["origin","orientation","relativeVelocity","c"], data=>new InertialFrame({origin:eventFromData(data.origin),orientation:data.orientation,relativeVelocity:data.relativeVelocity,c:data.c})],
   ["MaxwellEquations",MaxwellEquations,["c","epsilon0"], data=>new MaxwellEquations({c:data.c,epsilon0:data.epsilon0})],
   ["FourVelocity",FourVelocity,["components","c"], data=>new FourVelocity(data.components,{c:data.c})],
