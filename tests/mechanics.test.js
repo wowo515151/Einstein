@@ -282,6 +282,13 @@ test("electromagnetic pseudoscalar survives unrepresentable electric intermediat
   assert.equal(mixed.magneticMinusElectricOverC2,0);
   assert.ok(Math.abs(mixed.electricDotMagnetic/1e-200-1)<1e-12);
 });
+test("stress-energy lowering follows the declared two-index contraction",()=>{
+  const field=EMFieldTensor.fromEB([1,0,0],[0,0,0],{c:1,epsilon0:1});
+  const matrix=a=>[[-1,a,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
+  const expected=a=>[[.5,a/2,0,0],[-a,-.5,0,0],[0,0,.5,0],[0,0,0,.5]];
+  assert.deepEqual(field.energyMomentumTensor(matrix(.5)),expected(.5));
+  assert.deepEqual(field.energyMomentumTensor([matrix(.5),matrix(-.25)]),[expected(.5),expected(-.25)]);
+});
 test("stress energy scales representable results without forming c squared",()=>{
   const zero=EMFieldTensor.fromEB([0,0,0],[0,0,0],{c:1e200,epsilon0:1});
   assert.ok(zero.energyMomentumTensor().flat().every(value=>value===0));

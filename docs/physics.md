@@ -51,6 +51,8 @@ Lib4 frozen dataclass value objects freeze their JavaScript instance fields afte
 | `field.retardedTime(event)` | Retarded time as a number or batch for event coordinates shaped `(...,4)`. |
 | `field.retardedPotential(event)`, `field.evaluate(event)`, `field.sample(events)` | Contravariant four-potential components `(φ/c,A)` with leading event batches preserved. |
 
+For physically meaningful stress-energy calculations, supply a symmetric, nonsingular covariant metric. Raw matrices are accepted for compatibility with Lib4; lowering both field indices uses the full `G F Gᵀ` contraction even if a raw matrix is not symmetric. Nonsymmetric matrices are not physical metrics in this model.
+
 ## Shared context
 
 `new RelativityContext({metric,c,units,epsilon0,device})` groups constants and factories. Use `createVector`, `createCovector`, `createTensor`, `createEvent`, and `createSpacetimeInterval` with their component inputs. Use `createInertialFrame(origin,{orientation,relativeVelocity})`, `createLightCone(apex,{branch,atol})`, and `createSpatialSlice(origin,normal,basis,options)` for spacetime objects. Mechanics factories include `createFourVelocity(components)`, `fourVelocityFromVelocity3(v)`, `createFourMomentum(components)`, `fourMomentumFromMassVelocity(m,v)`, `createFourCurrent(rho,j)`, `createEMFieldTensor(E,B)`, `createMaxwellEquations()`, and `createRetardedField(position,velocity,charge,maxSpeed,options)`. Context-dependent constants are supplied by the context. `context.setUnits(units,options)` and `context.toDevice(label)` each return a new context without converting existing arrays or values.

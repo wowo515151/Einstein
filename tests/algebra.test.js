@@ -257,6 +257,15 @@ test("bivector dual and pseudoscalar use the metric volume form",()=>{
   const squaredDual=field.dual().dual().components;
   for(let i=0;i<4;i++)for(let j=0;j<4;j++)assert.ok(Math.abs(squaredDual[i][j]+field.components[i][j])<1e-12);
 });
+test("bivector dual and invariant lower both indices with the supplied matrix",()=>{
+  const field=new Bivector4([[0,1,0,0],[-1,0,0,0],[0,0,0,0],[0,0,0,0]]);
+  const matrix=a=>[[-1,a,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
+  const metric=new Metric4([matrix(.5),matrix(-.25)],{validate:false});
+  const invariants=field.invariants(metric),dual=field.dual(metric).components;
+  assert.deepEqual(invariants.quadratic,[-1,-1]);
+  assert.deepEqual(invariants.pseudoscalar,[0,0]);
+  for(const value of dual){assert.equal(value[2][3],-1);assert.equal(value[3][2],1);}
+});
 test("bivector contraction and Hodge dual use custom Lorentz metrics",()=>{
   const field=new Bivector4([[0,1,0,0],[-1,0,0,0],[0,0,0,2],[0,0,-2,0]]);
   assert.deepEqual(field.contract([1,2,0,0]).components,[2,-1,0,0]);
