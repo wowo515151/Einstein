@@ -68,6 +68,13 @@ test("application fallback supports keyboard sample inspection and scene changes
     byId("sample-number").value=String(rows.length+1);byId("inspect-sample").emit("click");
     assert.match(byId("selection-readout").textContent,/Choose a sample/);
     const buttons=byId("scene-list").querySelectorAll("button");
+    byId("observer-frame").value="moving";byId("observer-frame").emit("change");
+    buttons.find(button=>button.dataset.scene==="light-cone").emit("click");
+    buttons.find(button=>button.dataset.scene==="minkowski").emit("click");
+    assert.equal(byId("observer-frame").value,"lab");
+    byId("time-slider").value="0.25";byId("time-slider").emit("input");
+    byId("sample-number").value="2";byId("inspect-sample").emit("click");
+    assert.equal(byId("selection-readout").textContent,describeSample(buildSceneData("minkowski",{time:.25,beta:.6,observerFrame:"lab"}),2));
     buttons.find(button=>button.dataset.scene==="light-cone").emit("click");
     byId("time-slider").value="0.75";byId("time-slider").emit("input");
     assert.match(byId("scene-readout").textContent,/future surface samples;.*surface null; r = 0 timelike, r = 2\|ct\| spacelike/);

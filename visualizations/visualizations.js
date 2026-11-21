@@ -468,6 +468,7 @@ function selectScene(scene) {
   time = 0;
   playback.seek(0);
   observerFrame = "lab";
+  observerFrameSelect.value = observerFrame;
   timeSlider.value = "0";
   stopAnimation();
   updateDescription();
