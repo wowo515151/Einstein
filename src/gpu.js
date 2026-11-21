@@ -1,3 +1,5 @@
+import {LorentzTransform} from "./algebra.js";
+
 const MAX_BATCH_VECTORS=262_144;
 const FLOAT32_MAX=3.402823466e38;
 const FLOAT32_MIN_NORMAL=1.1754943508222875e-38;
@@ -215,6 +217,30 @@ function exactDot(left,right,offset){
 }
 
 export async function minkowskiDotBatch(left,right,{backend="auto",gpu=null}={}){if(backend==="cpu")return cpuDots(left,right);if(backend!=="webgpu"&&backend!=="auto")throw new TypeError("backend must be auto, cpu, or webgpu");const instance=gpu??new WebGPUBackend();try{return await instance.minkowskiDotBatch(left,right);}finally{if(gpu==null)instance.dispose();}}
+
+/** Apply one validated Lorentz matrix to a flat batch of four-vectors. */
+export async function lorentzTransformBatch(vectors,transform,{backend="auto",gpu=null}={}){
+  validateBatch(vectors,vectors);
+  if(!["auto","cpu","webgpu"].includes(backend))throw new TypeError("backend must be auto, cpu, or webgpu");
+  const lorentz=transform instanceof LorentzTransform?transform:new LorentzTransform(transform);
+  const matrix=lorentz._checkedMatrix();
+  if(lorentz.batchShape.length!==0)throw new RangeError("batch transform requires one Lorentz matrix");
+  if(!lorentz.validate())throw new RangeError("batch transform must preserve the Minkowski metric");
+  if(vectors.length===0){if(backend!=="cpu"&&gpu)gpu.lastExecution="none";return [];}
+  const input=Float64Array.from(vectors);
+  const instance=backend==="cpu"?null:(gpu??new WebGPUBackend()),execution=new Set(),output=Array(input.length);
+  try{
+    for(let row=0;row<4;row++){
+      const coefficients=new Float64Array(input.length);
+      for(let i=0;i<input.length;i+=4){coefficients[i]=-matrix[row][0];for(let j=1;j<4;j++)coefficients[i+j]=matrix[row][j];}
+      const result=backend==="cpu"?cpuDots(input,coefficients):await instance.minkowskiDotBatch(input,coefficients);
+      if(instance&&["cpu","webgpu"].includes(instance.lastExecution))execution.add(instance.lastExecution);
+      for(let i=0;i<result.length;i++)output[4*i+row]=result[i];
+    }
+    if(instance&&execution.size)instance.lastExecution=execution.size===1?[...execution][0]:"mixed";
+    return output;
+  }finally{if(instance&&gpu==null)instance.dispose();}
+}
 
 /** Squared Minkowski intervals for flat batches of start and end events. */
 export async function spacetimeIntervalSquaredBatch(start,end,options={}){

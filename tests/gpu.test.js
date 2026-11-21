@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {minkowskiDotBatch,spacetimeIntervalSquaredBatch,samplePlaneWaveBatch,samplePlaneWaveGrid,WebGPUBackend} from "../src/relativity/index.js";
+import {minkowskiDotBatch,lorentzTransformBatch,spacetimeIntervalSquaredBatch,samplePlaneWaveBatch,samplePlaneWaveGrid,WebGPUBackend,LorentzTransform} from "../src/relativity/index.js";
 
 test("batched event intervals use the selected backend and preserve causal signs",async()=>{
   const start=[0,0,0,0,1,0,0,0,2,1,0,0],end=[2,0,0,0,1,3,0,0,3,2,0,0];
@@ -12,6 +12,24 @@ test("batched event intervals use the selected backend and preserve causal signs
   assert.deepEqual(await spacetimeIntervalSquaredBatch([],[],{backend:"cpu"}),[]);
   await assert.rejects(()=>spacetimeIntervalSquaredBatch([1,2,3],[1,2,3],{backend:"cpu"}),/divisible by four/);
   await assert.rejects(()=>spacetimeIntervalSquaredBatch([-1e308,0,0,0],[1e308,0,0,0],{backend:"cpu"}),/displacement is non-finite/);
+});
+test("batched Lorentz transforms use the CPU or a shared screened backend",async()=>{
+  const boost=LorentzTransform.boost([.6,0,0]),vectors=[2,1,3,4,1,-1,0,0],expected=[1.75,-.25,3,4,2,-2,0,0];
+  const cpu=await lorentzTransformBatch(vectors,boost,{backend:"cpu"});for(let i=0;i<expected.length;i++)assert.ok(Math.abs(cpu[i]-expected[i])<1e-12);
+  let calls=0;const gpu={lastExecution:"none",async minkowskiDotBatch(left,right){this.lastExecution=++calls===1?"webgpu":"cpu";return minkowskiDotBatch(left,right,{backend:"cpu"});}};
+  const routed=await lorentzTransformBatch(vectors,boost.matrix,{backend:"webgpu",gpu});assert.deepEqual(routed,cpu);assert.equal(calls,4);assert.equal(gpu.lastExecution,"mixed");
+  let release;const gate=new Promise(resolve=>{release=resolve;}),mutable=[2,1,3,4],mutableBoost=LorentzTransform.boost([.6,0,0]);
+  const delayed={lastExecution:"cpu",async minkowskiDotBatch(left,right){await gate;return minkowskiDotBatch(left,right,{backend:"cpu"});}};
+  const pending=lorentzTransformBatch(mutable,mutableBoost,{backend:"webgpu",gpu:delayed});mutable[0]=999;mutableBoost.matrix[0][0]=999;release();
+  const snapshot=await pending;for(let i=0;i<4;i++)assert.ok(Math.abs(snapshot[i]-expected[i])<1e-12);
+  const fallback=new WebGPUBackend();fallback.initialize=async()=>false;
+  assert.deepEqual(await lorentzTransformBatch(vectors,boost,{backend:"webgpu",gpu:fallback}),cpu);assert.equal(fallback.lastExecution,"cpu");fallback.dispose();
+  const extreme=await lorentzTransformBatch([1e308,1e308,0,0],LorentzTransform.boost([.95,0,0]),{backend:"cpu"}),analytic=1e308*Math.sqrt((1-.95)/(1+.95));
+  assert.ok(Math.abs(extreme[0]/analytic-1)<1e-14);assert.ok(Math.abs(extreme[1]/analytic-1)<1e-14);
+  assert.deepEqual(await lorentzTransformBatch([],boost,{backend:"cpu"}),[]);
+  await assert.rejects(()=>lorentzTransformBatch([1,2,3],boost,{backend:"cpu"}),/divisible by four/);
+  await assert.rejects(()=>lorentzTransformBatch(vectors,[[2,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],{backend:"cpu"}),/preserve the Minkowski metric/);
+  await assert.rejects(()=>lorentzTransformBatch(vectors,LorentzTransform.identity({batchShape:[1]}),{backend:"cpu"}),/one Lorentz matrix/);
 });
 test("CPU batch dot product handles multiple events",async()=>{
   assert.deepEqual(await minkowskiDotBatch([1,2,0,0,2,1,0,0],[1,2,0,0,2,1,0,0],{backend:"cpu"}),[3,-3]);
