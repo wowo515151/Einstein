@@ -41,6 +41,16 @@ test("playback resumes from the selected position and honors a seek while playin
   assert.throws(()=>clock.controller.seek(1.1),/position/);
 });
 
+test("playback handles immediate stops and scheduler failures",()=>{
+  let controller,scheduled=0;
+  controller=createPlaybackController({onChange:playing=>{if(playing)controller.stop();},schedule:()=>{scheduled++;return 17;}});
+  assert.equal(controller.play(),"stopped");assert.equal(controller.playing,false);assert.equal(scheduled,0);
+  const changes=[],failure=createPlaybackController({onChange:playing=>changes.push(playing),schedule:()=>{throw new Error("scheduler failed");}});
+  assert.throws(()=>failure.play(),/scheduler failed/);assert.equal(failure.playing,false);assert.deepEqual(changes,[true,false]);
+  let cancelled=0,synchronous;
+  synchronous=createPlaybackController({now:()=>0,onFrame:()=>synchronous.stop(),schedule:callback=>{callback();return 42;},cancel:handle=>{assert.equal(handle,42);cancelled++;}});
+  assert.equal(synchronous.play(),"stopped");assert.equal(synchronous.playing,false);assert.equal(cancelled,1);
+});
 test("playback rejects invalid scheduler configuration",()=>{
   assert.throws(()=>createPlaybackController({durationMs:0}),/positive and finite/);
   assert.throws(()=>createPlaybackController({intervalMs:Infinity}),/positive and finite/);

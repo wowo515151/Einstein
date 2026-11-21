@@ -22,15 +22,20 @@ export function createPlaybackController({
     if(playing)return "already-playing";
     if(reducedMotion())return "reduced-motion";
     if(!available())return "unavailable";
-    startedAt=now();startPosition=position;playing=true;onChange(true);
-    timer=schedule(()=>{
+    startedAt=now();startPosition=position;playing=true;
+    try{onChange(true);}catch(error){playing=false;throw error;}
+    if(!playing||disposed)return "stopped";
+    let handle;
+    try{handle=schedule(()=>{
       if(disposed)return stop();
       if(reducedMotion())return stop();
       const elapsed=now()-startedAt;
       if(!Number.isFinite(elapsed)||elapsed<0)return stop();
       position=(startPosition+elapsed/durationMs)%1;
       onFrame(position);
-    },intervalMs);
+    },intervalMs);}catch(error){if(playing){playing=false;onChange(false);}throw error;}
+    if(!playing||disposed){cancel(handle);return "stopped";}
+    timer=handle;
     return "started";
   };
   const toggle=()=>playing?stop():play();
