@@ -218,3 +218,14 @@ test("forward Schwarzschild curvature is vacuum with analytic Kretschmann invari
     assert.ok(Math.abs(curvature.kretschmannScalar(point)-48*mass*mass/point[1]**6)<1e-12);
   }
 });
+
+
+test("forward connection derivatives match analytic expanding metric",()=>{
+  const H=.2,base=2**53,metric=p=>{const a=p[0].subtract(base).multiply(2*H).exp();return [[-1,0,0,0],[0,a,0,0],[0,0,a,0],[0,0,0,a]];},connection=new Connection4(metric);
+  const point=[base+2,0,0,0],derivative=connection.christoffelDerivativeForward(point),a=Math.exp(4*H);
+  assert.ok(Math.abs(derivative[0][0][1][1]-2*H*H*a)<1e-14);
+  assert.ok(Math.abs(derivative[0][1][0][1])<1e-14);
+  for(let e=1;e<4;e++)for(const v of derivative[e].flat(2))assert.equal(v,0);
+  const batch=connection.christoffelDerivativeForward([point,point]);assert.deepEqual(batch,[derivative,derivative]);
+  assert.throws(()=>connection.christoffelDerivativeForward(Array.from({length:257},()=>point)),/limit/);
+});

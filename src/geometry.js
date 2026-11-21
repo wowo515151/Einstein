@@ -122,6 +122,20 @@ export class DifferentialOperators4 {
 }
 function LeviCivitaTensor(g){const root=-determinantRoot(g).root,symbol=(()=>{const e=zeros(4).map(()=>zeros(4).map(()=>zeros(4).map(()=>Array(4).fill(0))));for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++){const v=[a,b,c,d];if(new Set(v).size===4){let p=0;for(let i=0;i<4;i++)for(let j=i+1;j<4;j++)if(v[i]>v[j])p++;e[a][b][c][d]=p%2?-1:1;}}return e;})();return symbol.map(a=>a.map(b=>b.map(c=>c.map(v=>v*root))));}
 
+function forwardConnectionDerivatives(metric,p){
+    const field=forwardSecondOrder4(metric,p),g=geometryMetric(field.value),gi=inverse(g),dg=field.jacobian,ddg=field.hessian;
+    const gamma=Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0)));
+    const derivative=Array.from({length:4},()=>Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0))));
+    const inverseDerivative=Array.from({length:4},()=>zeros(4));
+    for(let e=0;e<4;e++)for(let a=0;a<4;a++)for(let d=0;d<4;d++)for(let i=0;i<4;i++)for(let j=0;j<4;j++)inverseDerivative[e][a][d]-=gi[a][i]*dg[i][j][e]*gi[j][d];
+    for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++){
+      const q=dg[d][c][b]+dg[d][b][c]-dg[b][c][d];gamma[a][b][c]+=.5*gi[a][d]*q;
+      for(let e=0;e<4;e++)derivative[e][a][b][c]+=.5*(inverseDerivative[e][a][d]*q+gi[a][d]*(ddg[d][c][b][e]+ddg[d][b][c][e]-ddg[b][c][d][e]));
+    }
+    if(gamma.flat(2).some(value=>!Number.isFinite(value))||derivative.flat(3).some(value=>!Number.isFinite(value)))throw new RangeError("forward connection derivative is non-finite");
+    return {gamma,derivative};
+}
+
 export class Connection4 {
   constructor(metric,{step=1e-5,metricDerivative="finite"}={}){if(!["finite","forward"].includes(metricDerivative))throw new TypeError("metricDerivative must be finite or forward");this.metric=metric;this.step=validateDifferenceStep(step);this.metricDerivative=metricDerivative;}
   _g(x){const g=this.metric(x);return geometryMetric(g);}
@@ -130,6 +144,11 @@ export class Connection4 {
     const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),components=batchShape.reduce((count,size)=>count*size,1)*64;
     if(components>MAX_COVARIANT_COMPONENTS)throw new RangeError("Christoffel batch exceeds the component limit");
     return geometryBuildBatch(batchShape,index=>this._christoffelForwardScalar(geometryBatchGet(parsed.data,batchShape,index,batchShape)));
+  }
+  christoffelDerivativeForward(x){
+    const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),count=batchShape.reduce((product,size)=>product*size,1);
+    if(count*256>MAX_COVARIANT_COMPONENTS||count*4096>MAX_CURVATURE_BATCH_WORK)throw new RangeError("connection derivative batch exceeds the bounded component or work limit");
+    return geometryBuildBatch(batchShape,index=>forwardConnectionDerivatives(this.metric,geometryBatchGet(parsed.data,batchShape,index,batchShape)).derivative);
   }
   _christoffelForwardScalar(p){
     const differentiated=forwardJacobian4(this.metric,p),g=geometryMetric(differentiated.value),gi=inverse(g),dg=differentiated.jacobian,out=zeros(4).map(()=>zeros(4));
@@ -245,15 +264,7 @@ export class Curvature4 {
     return R;
   }
   _riemannForwardScalar(p){
-    const field=forwardSecondOrder4(this.metric,p),g=geometryMetric(field.value),gi=inverse(g),dg=field.jacobian,ddg=field.hessian;
-    const gamma=Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0)));
-    const derivative=Array.from({length:4},()=>Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0))));
-    const inverseDerivative=Array.from({length:4},()=>zeros(4));
-    for(let e=0;e<4;e++)for(let a=0;a<4;a++)for(let d=0;d<4;d++)for(let i=0;i<4;i++)for(let j=0;j<4;j++)inverseDerivative[e][a][d]-=gi[a][i]*dg[i][j][e]*gi[j][d];
-    for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++){
-      const q=dg[d][c][b]+dg[d][b][c]-dg[b][c][d];gamma[a][b][c]+=.5*gi[a][d]*q;
-      for(let e=0;e<4;e++)derivative[e][a][b][c]+=.5*(inverseDerivative[e][a][d]*q+gi[a][d]*(ddg[d][c][b][e]+ddg[d][b][c][e]-ddg[b][c][d][e]));
-    }
+    const {gamma,derivative}=forwardConnectionDerivatives(this.metric,p);
     const R=Array.from({length:4},()=>Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0))));
     for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++){
       let value=derivative[c][a][d][b]-derivative[d][a][c][b];
