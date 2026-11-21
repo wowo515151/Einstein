@@ -66,3 +66,5 @@ Four-current charge-density and spatial-current extraction validate the current 
 Four-momentum and four-velocity accessors validate mutable component arrays; energy and gamma reject non-finite outputs.
 
 Invariant mass normalizes momentum before division when individual component-to-c ratios overflow, preserving selected representable near-null results.
+
+`FourVelocity.validate({atol,rtol})` uses an absolute plus relative mass-shell tolerance. At very small `c`, a large absolute tolerance relative to `c²` can admit a null or otherwise off-shell vector; choose tolerances appropriate to the units and scale. If `c²` underflows to zero and normalizing components overflows, representable absolute comparisons are retained when the absolute tolerance is at least the smallest normal number.
