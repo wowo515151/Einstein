@@ -1,0 +1,17 @@
+# Relativity Library Help
+
+- [Conventions and units](conventions.md)
+- [API reference](api.md)
+- [Algebra types](algebra.md)
+- [Array and matrix helpers](arrays.md)
+- [Spacetime types](spacetime.md)
+- [Physics and fields](physics.md)
+- [Differential geometry](geometry.md)
+- [WebGPU and CPU backends](gpu.md)
+- [Three.js and ThreeViz integration](visualization.md)
+- [Examples](examples.md)
+- [Migrating from Lib4](migration.md)
+- [Numerical limits and scientific use](limits.md)
+- [Third-party code and provenance](provenance.md)
+- [Equation references and conventions](references.md)
+- [Lib4 port matrix](port-matrix.md)

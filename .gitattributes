@@ -1,0 +1,4 @@
+* text=auto eol=lf
+/src/three-viz/** -text whitespace=cr-at-eol
+/visualizations/vendor/** -text whitespace=cr-at-eol
+/THREEVIZ-LICENSE -text whitespace=cr-at-eol

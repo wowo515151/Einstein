@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08131f">
+  <title>Einstein Relativity Lab</title>
+  <link rel="stylesheet" href="./visualizations.css">
+</head>
+<body>
+  <a class="skip-link" href="#scene">Skip to visualization</a>
+  <header class="masthead">
+    <nav aria-label="Project navigation"><a href="../index.html">All visualizations</a> · <a href="../docs/README.html">Library help</a></nav>
+    <p class="eyebrow">RELATIVITY · INTERACTIVE LAB</p>
+    <h1>Einstein</h1>
+    <p class="intro">Explore spacetime, light, fields, and curved geometry through interactive 3D models.</p>
+    <p class="model-note">Educational models use the stated conventions and assumptions. They are not experimental predictions.</p>
+  </header>
+  <main>
+    <section class="workspace" aria-label="Visualization workspace">
+      <nav class="scene-nav" aria-label="Choose a visualization">
+        <h2>Visualizations</h2>
+        <ol id="scene-list" class="scene-list"></ol>
+      </nav>
+      <section class="viewer" aria-labelledby="scene-title">
+        <div class="viewer-heading">
+          <div><p id="scene-category" class="eyebrow">SPECIAL RELATIVITY</p><h2 id="scene-title" aria-live="polite">Minkowski spacetime</h2></div>
+          <p id="scene-status" class="status" role="status" aria-live="polite">Preparing local renderer…</p>
+        </div>
+        <div class="canvas-wrap" id="scene" tabindex="0" role="region" aria-label="Three dimensional scene. Use mouse controls when the renderer is available.">
+          <div id="canvas-host" class="canvas-host"></div>
+          <div id="axis-key" class="axis-key" role="group" aria-label="Coordinate axes">
+            <span><b class="axis-x">x</b><span id="axis-x-meaning">x position</span></span>
+            <span><b class="axis-y">y</b><span id="axis-y-meaning">ct time</span></span>
+            <span><b class="axis-z">z</b><span id="axis-z-meaning">projection depth</span></span>
+            <span class="axis-units">Normalized display units</span>
+          </div>
+          <div id="renderer-fallback" class="renderer-fallback" role="note" hidden>
+            <strong>3D renderer unavailable</strong>
+            <span>This offline page bundles Three.js r128 and OrbitControls. Rendering needs JavaScript modules and WebGL; the model controls and scientific readouts remain available if the renderer cannot start. No remote scripts or libraries are requested.</span>
+          </div>
+        </div>
+        <p class="hint">When the 3D scene is available, focus it and use arrow keys to orbit or plus and minus to zoom.</p>
+        <section class="scene-description">
+          <p id="scene-summary"></p>
+          <p id="scene-limit" class="limit-note"></p>
+          <p id="scene-readout" class="metric-readout"></p>
+          <p id="selection-readout" class="metric-readout" role="status" aria-live="polite">Select a sample point or use the sample inspector to view its display coordinates.</p>
+        </section>
+        <fieldset class="controls" id="controls">
+          <legend>Scene controls</legend>
+          <label class="parameter-control" for="sample-number"><span>Sample number</span><input id="sample-number" type="number" min="1" value="1" step="1" aria-describedby="sample-hint"></label>
+          <p id="sample-hint" class="hint">Choose a sample number, then inspect it. Inspection pauses animation.</p>
+          <div><button id="inspect-sample" type="button">Inspect sample</button></div>
+          <label class="time-control" for="time-slider"><span>Time</span><output id="time-output" for="time-slider" aria-live="off">0.00</output></label>
+          <input id="time-slider" type="range" min="0" max="1" value="0" step="0.01" aria-describedby="time-hint">
+          <p id="time-hint" class="hint">Drag the slider or use the arrow keys to move through the model.</p>
+          <div class="button-row">
+            <button id="play-button" type="button" aria-pressed="false">Play animation</button>
+            <button id="reset-button" type="button">Reset view</button>
+          </div>
+          <label class="parameter-control" for="speed-slider"><span>Model parameter</span><output id="speed-output" for="speed-slider">0.60</output></label>
+          <input id="speed-slider" type="range" min="0.05" max="0.95" value="0.6" step="0.01">
+          <p id="parameter-hint" class="hint">Dimensionless speed β = v/c; the value remains below 1.</p>
+          <div id="observer-frame-control" class="observer-frame-control" hidden>
+            <label class="parameter-control select-control" for="observer-frame">
+              <span>Observer frame</span>
+              <select id="observer-frame" aria-describedby="observer-frame-hint">
+                <option value="lab">Laboratory frame</option>
+                <option value="moving">Moving observer frame</option>
+              </select>
+            </label>
+            <p id="observer-frame-hint" class="hint">Switch frames to Lorentz-transform both worldlines with the relativity library.</p>
+          </div>
+        </fieldset>
+      </section>
+    </section>
+    <section class="details" aria-labelledby="about-title">
+      <h2 id="about-title">Reading the model</h2>
+      <p id="model-explanation">The spacetime coordinate convention is x⁰ = ct with metric signature (−,+,+,+). Axes are labeled in normalized units unless stated otherwise.</p>
+      <ul>
+        <li>Exact: direct algebraic relationships evaluated from the stated model.</li>
+        <li>Numerical: sampled or integrated approximations with finite resolution.</li>
+        <li>Pedagogical: a simplified geometry chosen to show a concept, not a calibrated astrophysical solution.</li>
+      </ul>
+    </section>
+  </main>
+  <footer><p>Local demonstration · Three.js r128 and OrbitControls are MIT licensed; see <a href="./vendor/THREE-LICENSE.txt">the dependency license</a>. No analytics, remote scripts, or data collection.</p></footer>
+  <script src="./vendor/three-r128.min.js"></script>
+  <script src="./vendor/OrbitControls-r128.js"></script>
+  <script>
+    globalThis.EINSTEIN_THREE_RUNTIME = Object.freeze({
+      THREE: globalThis.THREE,
+      OrbitControls: globalThis.THREE?.OrbitControls,
+    });
+  </script>
+  <script type="module" src="./visualizations.js"></script>
+</body>
+</html>

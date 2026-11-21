@@ -1,0 +1,56 @@
+# Physics and Fields
+
+## Mechanics values
+
+| Call | Returns |
+| --- | --- |
+| `new FourVelocity(components,{c})`, `FourVelocity.fromVelocity3(v,c)` | A `FourVelocity` from four-components or a subluminal three-velocity. The speed of light is optional and defaults to SI. |
+| `u.gamma()`, `u.toVelocity3()` | A scalar gamma or three-velocity array, preserving leading batches. |
+| `u.relativeVelocity(other)` | The other velocity's three-components in this observer's instantaneous rest frame; both values must use the same `c`. |
+| `u.validate({atol,rtol})` | One Boolean indicating whether all samples are future-directed and normalized. |
+| `new FourMomentum(components,{c})`, `FourMomentum.fromMassVelocity(m,v,c)` | A `FourMomentum` storing `(E/c,p)`; mass and velocity batches may broadcast. |
+| `p.energy()`, `p.momentum3()`, `p.invariantMass({clampRoundoff})` | Energy, three-momentum components, or invariant mass, with leading batches preserved. |
+| `p.boost(transform)` | A new `FourMomentum` under a validated Lorentz transform or matrix. |
+| `new FourCurrent(components,{c})`, `FourCurrent.fromChargeCurrent(rho,j,{c})` | A `FourCurrent` storing `(cρ,j)`. |
+| `current.chargeDensity()`, `current.spatialCurrent()`, `current.transform(matrix)` | Charge density, spatial current, or a transformed `FourCurrent`. |
+
+Maxwell residual time differences divide directly by the timestep, including at subnormal timesteps. Both spatial and residual time differences divide terms separately if finite samples have an overflowing difference, and reject an unrepresentable derivative. These measures do not guarantee accuracy for arbitrary extreme-scale histories.
+
+`FourVelocity.fromVelocity3(v,c)` rejects `|v|≥c`, constructs a normalized future-directed four-velocity, and exposes `gamma`, `toVelocity3`, and `validate`. `relativeVelocity(other)` returns the three-velocity of `other` after transforming it into this observer's instantaneous rest frame; compatible batch shapes broadcast. Construction preserves Lib4's distinction between shape validity and physical validation, so use `validate()` when accepting externally supplied four-velocities. Mechanics tensors are bounded to one million components and rank eight. `FourMomentum.fromMassVelocity(m,v,c)` stores `(E/c,p)` and broadcasts compatible mass/velocity batch dimensions. `energy`, `momentum3`, and `invariantMass` preserve batches; `boost` accepts a single or broadcast batch of Lorentz matrices and validates each applied matrix. Invariant-mass roundoff tolerance scales with momentum magnitude. With `clampRoundoff:false`, JavaScript still throws for a small negative residual within tolerance to avoid returning `NaN`; Lib4's direct square root can return `NaN` for that opt-out case. `FourCurrent.fromChargeCurrent(rho,j,{c})` stores `(cρ,j)` and broadcasts compatible leading dimensions of `rho` and `j`; `chargeDensity` and `spatialCurrent` preserve those dimensions. `transform` broadcasts a single or batched Lorentz matrix over the current batch and validates every applied matrix. The local Lib4 FourCurrent API has no separate field-coupling method. `MaxwellEquations` accepts a `FourCurrent` value as its grid source when its batch and spatial shapes match the field grid.
+
+Lib4 frozen dataclass value objects freeze their JavaScript instance fields after construction: `Event4`, `SpacetimeInterval`, `LightCone`, `SpatialSlice`, `InertialFrame`, Lorentz/Poincare transforms, mechanics values, and `MaxwellEquations`. This matches dataclass field reassignment behavior; nested component arrays remain ordinary mutable JavaScript arrays, as Lib4's contained tensor data is mutable too.
+
+`RelativityContext` keeps `c`, units, `epsilon0`, and a validated metric together. Natural units require `c=1` and default to `epsilon0=1/(4π)`. Factories for vectors, covectors, tensors, events, intervals, frames, light cones, spatial slices, four-velocity, four-momentum, four-current, electromagnetic fields, Maxwell equations, and retarded fields are available. Factories that depend on `c` or `epsilon0` propagate those context constants; representative algebra and mechanics factories are tested directly. `setUnits` returns a context with new constants but does not convert existing values. `toDevice` returns a context carrying the requested device label; plain JavaScript arrays do not move to a device, and WebGPU work remains explicit through `WebGPUBackend`. Lib4's PyTorch dtype/device placement and tensor-transfer semantics are not implemented.
+
+`EMFieldTensor.fromEB(E,B,{c,epsilon0})` combines the electric and magnetic fields into an antisymmetric tensor and broadcasts compatible field batch dimensions. Field accessors, invariants, dual, Lorentz transformation, Lorentz force, and stress-energy preserve batches; tensor and transform dimensions broadcast where applicable. `invariants()` returns named `magneticMinusElectricOverC2` and `electricDotMagnetic` values, each with the field batch shape; Lib4 returns the same two values as a tuple. Batched JavaScript results previously used an array of objects. The pseudoscalar uses scaled arithmetic when intermediate electric components or products overflow or underflow; extreme cancellation and scale disparities can still lose precision. Applied Lorentz matrices are validated, and inputs are bounded to one million scalar components and rank eight.
+
+## Electromagnetic tensor
+
+| Call | Returns |
+| --- | --- |
+| `new EMFieldTensor(components,{c,epsilon0,validate})` | An electromagnetic tensor from antisymmetric 4×4 components; validation is enabled by default. |
+| `EMFieldTensor.fromEB(E,B,{c,epsilon0})` | An electromagnetic tensor constructed from electric and magnetic three-vectors. |
+| `field.electricField(c)`, `field.magneticField()` | Electric or magnetic component arrays; the electric accessor optionally overrides `c`. |
+| `field.invariants(c)` | `{magneticMinusElectricOverC2,electricDotMagnetic}`, each a number or batch. The `c` argument is optional. |
+| `field.dual({orientation})`, `field.transform(matrix)` | A new `EMFieldTensor`; orientation defaults to `1`. |
+| `field.lorentzForce(charge,uCovariant)` | Four-force component arrays. Supply covariant four-velocity components and consistent units. |
+| `field.energyMomentumTensor(metric,{epsilon0})` | 4×4 stress-energy component arrays; metric and permittivity override are optional. |
+
+`MaxwellEquations.evolve(E,B,{spacing,dt,steps,current})` uses periodic forward/backward Yee-style differences with electric samples at whole times and magnetic samples at half times. It returns `[electricTimes,electricHistory,magneticTimes,magneticHistory]`. Up to seven leading batch axes are preserved after the history time axis; electric, magnetic, and supplied current grids must have matching batch and spatial shapes. A current may be supplied as a spatial-current grid `[...,Nx,Ny,Nz,3]` or four-current grid `[...,Nx,Ny,Nz,4]` in `(cρ,j)` order, or as a compatible batched `FourCurrent`. `maxwellResiduals` returns discrete Ampère and Faraday history residuals; `constraintResiduals` returns Gauss electric and magnetic residuals with discrete charge continuity. Each grid is limited to 32,768 cells and total stored history to 1,000,000 scalar field components across all batches and times. Residual and constraint APIs preflight the combined history shape against this limit before traversing and copying frame data. Nested grid/history arrays must be acyclic and use no more than twelve dimensions. The 3D Yee CFL condition is checked. When c squared overflows, underflows, or becomes subnormal, electric updates and Ampère residuals use scaled products. Current coupling avoids explicitly forming an unrepresentable inverse permittivity; the electric Gauss residual also rescales charge continuity when permittivity is subnormal. This does not guarantee accuracy for all extreme grid values. The implementation does not reproduce PyTorch device/autograd behavior or component-specific Yee offsets. `RetardedField.retardedTime(event)` and `retardedPotential(event)` accept event arrays shaped `(...,4)` and preserve their leading dimensions; `evaluate` and `sample` use the same batched potential contract. Root finding uses a distance-based bracket and bounded bisection, with aggregate batch root-work capped at one million iterations. Source speed is checked against both `c` and its declared bound. Point-charge potential is singular on the source worldline. Non-finite observation times, root brackets or residuals, and potential components are rejected; representable results at extreme scales are not generally guaranteed. PyTorch device/dtype/autograd behavior is not represented.
+
+## Maxwell solver and retarded potential
+
+| Call | Returns |
+| --- | --- |
+| `new MaxwellEquations({c,epsilon0})` | A solver with optional physical constants. |
+| `solver.evolve(E,B,{spacing,dt,steps,current})` | `[electricTimes,electricHistory,magneticTimes,magneticHistory]`; `dt` is required, while spacing and steps have defaults. |
+| `solver.maxwellResiduals(electric,magnetic,{spacing,dt,current})` | `{ampere,faraday}` discrete residual histories; use the same spacing, timestep, and current as the evolution. |
+| `solver.constraintResiduals(electric,magnetic,{spacing,dt,current})` | `{gauss_e,gauss_b}` constraint histories, including charge continuity from the supplied current. |
+| `solver.energyMomentumTensor(field,metric)` | Stress-energy component arrays; field and solver constants must match. |
+| `new RetardedField(positionAtTime,velocityAtTime,charge,maxSpeed,{c,epsilon0,maxIterations,tolerance})` | A point-charge potential model. Callbacks accept scalar time and return spatial triples. |
+| `field.retardedTime(event)` | Retarded time as a number or batch for event coordinates shaped `(...,4)`. |
+| `field.retardedPotential(event)`, `field.evaluate(event)`, `field.sample(events)` | Contravariant four-potential components `(φ/c,A)` with leading event batches preserved. |
+
+## Shared context
+
+`new RelativityContext({metric,c,units,epsilon0,device})` groups constants and factories. Use `createVector`, `createCovector`, `createTensor`, `createEvent`, and `createSpacetimeInterval` with their component inputs. Use `createInertialFrame(origin,{orientation,relativeVelocity})`, `createLightCone(apex,{branch,atol})`, and `createSpatialSlice(origin,normal,basis,options)` for spacetime objects. Mechanics factories include `createFourVelocity(components)`, `fourVelocityFromVelocity3(v)`, `createFourMomentum(components)`, `fourMomentumFromMassVelocity(m,v)`, `createFourCurrent(rho,j)`, `createEMFieldTensor(E,B)`, `createMaxwellEquations()`, and `createRetardedField(position,velocity,charge,maxSpeed,options)`. Context-dependent constants are supplied by the context. `context.setUnits(units,options)` and `context.toDevice(label)` each return a new context without converting existing arrays or values.

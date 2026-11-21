@@ -1,0 +1,5 @@
+body { max-width: 76rem; margin: auto; padding: 1.5rem; font: 1rem/1.55 system-ui, sans-serif; color: #eaf4ff; background: #08131f; }
+a { color: #72dcff; } a:focus-visible { outline: 3px solid #ffe27a; }
+code, pre { font-family: ui-monospace, monospace; } code { overflow-wrap: anywhere; }
+pre { overflow: auto; padding: 1rem; background: #142c41; }
+.table-wrap { overflow-x: auto; } table { border-collapse: collapse; } th, td { border: 1px solid #53718a; padding: .5rem; vertical-align: top; text-align: left; }
