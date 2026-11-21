@@ -57,3 +57,19 @@ test("seeded electromagnetic fields retain both invariants under Lorentz boosts"
     for(const name of ["magneticMinusElectricOverC2","electricDotMagnetic"])assert.ok(Math.abs(before[name]-after[name])<2e-11*Math.max(1,Math.abs(before[name])));
   }
 });
+
+test("seeded Lorentz forces transform as four-vectors and stay orthogonal to four-velocity",()=>{
+  const random=seededRandom(0x464f5243),sample3=scale=>Array.from({length:3},()=>scale*(2*random()-1));
+  for(let trial=0;trial<64;trial++){
+    const field=EMFieldTensor.fromEB(sample3(1),sample3(1),{c:1});
+    const velocity=FourVelocity.fromVelocity3(sample3(.3),1);
+    const boost=LorentzTransform.boost(sample3(.2));
+    const lower=new Vector4(velocity.components).lowerIndex();
+    const force=field.lorentzForce(1,lower);
+    const transformedVelocity=boost.applyVector(velocity.components);
+    const boostedForce=field.transform(boost).lorentzForce(1,transformedVelocity.lowerIndex());
+    const expected=boost.applyVector(force).components;
+    for(let axis=0;axis<4;axis++)assert.ok(Math.abs(boostedForce[axis]-expected[axis])<2e-11*Math.max(1,Math.abs(expected[axis])));
+    assert.ok(Math.abs(minkowskiDot(velocity.components,force))<2e-11);
+  }
+});

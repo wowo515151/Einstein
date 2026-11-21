@@ -2,5 +2,9 @@
   "name": "einstein-relativity-local",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/relativity/index.js",
+    "./three-viz": "./src/three-viz/index.js"
+  },
   "scripts": {"test": "node --test"}
 }

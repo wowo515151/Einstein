@@ -2,6 +2,8 @@
 
 - [Conventions and units](conventions.md)
 - [API reference](api.md)
+- [Lib4 public method inventory](lib4-method-inventory.md)
+- [Lib4 instance field map](lib4-fields.md)
 - [Algebra types](algebra.md)
 - [Array and matrix helpers](arrays.md)
 - [Spacetime types](spacetime.md)

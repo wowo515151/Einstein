@@ -225,6 +225,32 @@ test("geodesic samples preserve initial Event4 metadata through boundary shootin
     for(const sample of samples){assert.equal(sample.event.frame,"observer");assert.equal(sample.event.c,2);}
   }
 });
+test("geodesic honors a replaced Event4 and its metadata in integration and shooting",()=>{
+  const geo=new Geodesic4(new Connection4(flat),new Event4([0,0,0,0],"old",2),[1,0,0,0]);
+  geo.initialEvent=new Event4([2,3,0,0],"new",4);
+  for(const rows of [geo.integrate([0,1],{steps:2}),geo.solveBoundary([3,3,0,0],[0,1],{steps:2})]){
+    assert.deepEqual(rows.at(-1).event.position,[3,3,0,0]);
+    assert.equal(rows.at(-1).event.frame,"new");assert.equal(rows.at(-1).event.c,4);
+  }
+  geo.initialEvent=new Event4([[2,3,0,0],[4,5,0,0]],"batch",4);
+  geo.initialTangent=[[1,0,0,0],[1,0,0,0]];
+  const batch=geo.integrate([0,1],{steps:2}).at(-1).event;
+  assert.deepEqual(batch.position,[[3,3,0,0],[5,5,0,0]]);assert.equal(batch.frame,"batch");
+  assert.throws(()=>geo.solveBoundary([3,3,0,0],[0,1],{steps:2}),/unbatched/);
+  const forward=new Geodesic4(new Connection4(flat,{metricDerivative:"forward"}),[0,0,0,0],[1,0,0,0]);
+  forward.initialEvent=new Event4([2,3,0,0],"new",4);
+  assert.deepEqual(forward.endpointSensitivityForward([0,1],{steps:2}).event,[3,3,0,0]);
+  assert.equal(forward.solveBoundary([3,3,0,0],[0,1],{steps:2,jacobianMethod:"forward"}).at(-1).event.frame,"new");
+});
+test("curvature metric replacement updates its standard connection",()=>{
+  const curved=x=>[[-1,0,0,0],[0,Math.exp(.4*x[0]),0,0],[0,0,Math.exp(.4*x[0]),0],[0,0,0,Math.exp(.4*x[0])]];
+  const point=[.2,0,0,0],curvature=new Curvature4(flat,{step:2e-4});
+  assert.ok(Math.abs(curvature.ricciScalar(point))<1e-8);
+  curvature.metric=curved;
+  const expected=new Curvature4(curved,{step:2e-4}).ricciScalar(point);
+  assert.ok(Math.abs(expected-.48)<1e-5);
+  assert.ok(Math.abs(curvature.ricciScalar(point)-expected)<1e-12);
+});
 test("geodesic integration supports matching event and tangent batches",()=>{
   const conn=new Connection4(flat),events=[[0,0,0,0],[1,2,3,4]],tangents=[[1,0,0,0],[0,2,0,0]],rows=new Geodesic4(conn,events,tangents).integrate([0,1],{steps:8});
   assert.deepEqual(rows.at(-1).event.position,[[1,0,0,0],[1,4,3,4]]);
@@ -232,6 +258,11 @@ test("geodesic integration supports matching event and tangent batches",()=>{
   assert.deepEqual(rows[3].event.position[1],new Geodesic4(conn,events[1],tangents[1]).integrate([0,1],{steps:8})[3].event.position);
   assert.throws(()=>new Geodesic4(conn,events,[[1,0,0,0]]),/matching/);
   assert.throws(()=>new Geodesic4(conn,events,tangents).solveBoundary([1,0,0,0],[0,1]),/unbatched/);
+  const mutable=new Geodesic4(conn,events,tangents);
+  mutable.initialTangent=[[1,0,0,0]];assert.throws(()=>mutable.integrate([0,1],{steps:1}),/matching/);
+  mutable.initialEvent=[0,0,0,0];mutable.initialTangent=[[1,0,0,0],[0,1,0,0]];
+  assert.throws(()=>mutable.integrate([0,1],{steps:1}),/matching/);
+  mutable.initialTangent=[1,0,0,0];assert.deepEqual(mutable.integrate([0,1],{steps:1}).at(-1).event.position,[1,0,0,0]);
 });
 test("finite-difference connection responds to a varying metric",()=>{
   const metric=x=>[[-1,0,0,0],[0,(1+x[0])**2,0,0],[0,0,1,0],[0,0,0,1]];
@@ -503,4 +534,239 @@ test("differential-operator Hodge dual follows the Lorentzian covariant-form con
   assert.equal(euclidean.hodgeDual(form)[2][3],-1);
   const tiny=new DifferentialOperators4(new Metric4([[-1e-200,0,0,0],[0,1e-200,0,0],[0,0,1,0],[0,0,0,1]]));
   assert.throws(()=>tiny.hodgeDual(form),/raised components are non-finite/);
+});
+
+test("Hodge dual broadcasts constant metric and form batches",()=>{
+  const form=[[0,1,0,0],[-1,0,0,0],[0,0,0,0],[0,0,0,0]];
+  const minkowski=[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],euclidean=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
+  const metrics=[[minkowski],[euclidean]],forms=[[form,form.map(row=>row.map(value=>2*value))]];
+  for(const metric of [metrics,new Metric4(metrics)]){
+    const dual=new DifferentialOperators4(metric).hodgeDual(forms,null);
+    assert.equal(dual.length,2);assert.equal(dual[0].length,2);
+    assert.equal(dual[0][0][2][3],1);assert.equal(dual[0][1][2][3],2);
+    assert.equal(dual[1][0][2][3],-1);assert.equal(dual[1][1][2][3],-2);
+    assert.equal(dual[0][0][3][2],-1);assert.equal(dual[1][1][3][2],2);
+    assert.deepEqual(new DifferentialOperators4(metric).hodgeDual(forms,[[[0,0,0,0],[1,2,3,4]]]),dual);
+    assert.throws(()=>new DifferentialOperators4(metric).hodgeDual([[form],[form],[form]]),/broadcast/);
+  }
+  assert.throws(()=>new DifferentialOperators4(()=>minkowski).hodgeDual(form,null),/x is required/);
+});
+
+test("gradient and Hodge dual broadcast position-dependent metric families",()=>{
+  const diagonal=b=>[[-1,0,0,0],[0,b,0,0],[0,0,1,0],[0,0,0,1]];
+  const points=[[[1,1,0,0],[2,2,0,0]]],form=[[0,1,0,0],[-1,0,0,0],[0,0,0,0],[0,0,0,0]],forms=[[form,form.map(row=>row.map(value=>2*value))]];
+  let calls=0;
+  const ops=new DifferentialOperators4(p=>{calls++;return [[diagonal(2+p[1])],[diagonal(3+p[1])]];},{step:1e-4});
+  const gradient=ops.gradient(p=>p[0]+p[1],points);
+  assert.equal(calls,2);
+  for(let family=0;family<2;family++)for(let sample=0;sample<2;sample++){
+    const b=2+family+points[0][sample][1];
+    assert.ok(Math.abs(gradient[family][sample][0]+1)<1e-9);
+    assert.ok(Math.abs(gradient[family][sample][1]-1/b)<1e-9);
+  }
+  calls=0;const dual=ops.hodgeDual(forms,points);assert.equal(calls,2);
+  for(let family=0;family<2;family++)for(let sample=0;sample<2;sample++){
+    const b=2+family+points[0][sample][1];
+    assert.ok(Math.abs(dual[family][sample][2][3]-(sample+1)/Math.sqrt(b))<1e-12);
+  }
+  let fieldCalls=0;assert.throws(()=>ops.gradient(()=>{fieldCalls++;return 0;},[[[0,1,0,0]],[[0,2,0,0]],[[0,3,0,0]]]),/broadcast/);assert.equal(fieldCalls,0);
+  const changing=new DifferentialOperators4(p=>p[1]<2?[diagonal(1),diagonal(2)]:[diagonal(1)]);
+  assert.throws(()=>changing.gradient(p=>p[0],[[0,1,0,0],[0,2,0,0]]),/metric callback batch shape must remain constant/);
+  let metricCalls=0,oversizedFieldCalls=0;
+  const bounded=new DifferentialOperators4(()=>{metricCalls++;return Array.from({length:200},()=>diagonal(1));});
+  assert.throws(()=>bounded.gradient(()=>{oversizedFieldCalls++;return 0;},Array.from({length:30},()=>[0,0,0,0])),/metric callback batch exceeds/);
+  assert.equal(metricCalls,1);assert.equal(oversizedFieldCalls,0);
+});
+
+test("divergence and wave operator broadcast curved callback metric families",()=>{
+  let metricCalls=0;
+  const metric=p=>{metricCalls++;return [.2,.5].map(k=>[[[-1,0,0,0],[0,Math.exp(2*k*p[1]),0,0],[0,0,1,0],[0,0,0,1]]]);};
+  const points=[[[0,1,0,0],[0,2,0,0]]],ops=new DifferentialOperators4(metric,{step:1e-4});
+  const divergence=ops.divergence(p=>[0,p[1],0,0],points);assert.equal(metricCalls,18);
+  metricCalls=0;const wave=ops.dAlembertian(p=>p[1]**2,points);assert.equal(metricCalls,18);
+  for(let family=0;family<2;family++)for(let sample=0;sample<2;sample++){
+    const k=[.2,.5][family],x=points[0][sample][1];
+    assert.ok(Math.abs(divergence[family][sample]-(1+k*x))<1e-7);
+    assert.ok(Math.abs(wave[family][sample]-Math.exp(-2*k*x)*(2-2*k*x))<1e-6);
+  }
+  let fieldCalls=0;
+  const changing=new DifferentialOperators4(p=>p[1]>1.00005?[metric(p)[0]]:metric(p),{step:1e-4});
+  assert.throws(()=>changing.divergence(()=>{fieldCalls++;return [0,0,0,0];},[0,1,0,0]),/metric callback batch shape must remain constant/);
+  assert.equal(fieldCalls,0);
+  let metricSamples=0;
+  const bounded=new DifferentialOperators4(()=>{metricSamples++;return Array.from({length:900},()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]);});
+  assert.throws(()=>bounded.divergence(()=>{fieldCalls++;return [0,0,0,0];},[0,0,0,0]),/metric callback derivative batch exceeds/);
+  assert.equal(metricSamples,1);assert.equal(fieldCalls,0);
+});
+
+test("connection and acceleration broadcast curved metric families",()=>{
+  let calls=0;const metric=p=>{calls++;return [.2,.5].map(k=>[[[-1,0,0,0],[0,Math.exp(2*k*p[1]),0,0],[0,0,1,0],[0,0,0,1]]]);};
+  const points=[[[0,1,0,0],[0,2,0,0]]],tangents=[[[1,2,0,0],[1,3,0,0]]],connection=new Connection4(metric,{step:1e-4});
+  const gamma=connection.christoffel(points);assert.equal(calls,18);
+  calls=0;const acceleration=connection.geodesicAcceleration(points,tangents);assert.equal(calls,18);
+  for(let family=0;family<2;family++)for(let sample=0;sample<2;sample++){
+    const k=[.2,.5][family],v=tangents[0][sample][1];
+    assert.ok(Math.abs(gamma[family][sample][1][1][1]-k)<1e-8);
+    assert.ok(Math.abs(acceleration[family][sample][1]+k*v*v)<1e-7);
+  }
+  const offDiagonal=p=>[.1,.25].map(scale=>[[[-1,scale,0,0],[scale,2+p[1]**2,0,0],[0,0,1,0],[0,0,0,1]]]);
+  const familyGamma=new Connection4(offDiagonal,{step:1e-4}).christoffel(points);
+  for(let family=0;family<2;family++)for(let sample=0;sample<2;sample++){
+    const scalar=new Connection4(p=>offDiagonal(p)[family][0],{step:1e-4}).christoffel(points[0][sample]);
+    for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)assert.ok(Math.abs(familyGamma[family][sample][a][b][c]-scalar[a][b][c])<1e-12);
+  }
+  assert.throws(()=>connection.geodesicAcceleration(points,[[[1,0,0,0]],[[1,0,0,0]],[[1,0,0,0]]]),/broadcast/);
+  let oversizedCalls=0;const oversized=new Connection4(()=>{oversizedCalls++;return Array.from({length:900},()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]);});
+  assert.throws(()=>oversized.christoffel([0,0,0,0]),/metric callback derivative batch exceeds/);assert.equal(oversizedCalls,1);
+});
+
+test("parallel transport broadcasts curved metric families, paths, and vectors",()=>{
+  const metric=p=>[.2,.5].map(k=>[[[-1,0,0,0],[0,Math.exp(2*k*p[1]),0,0],[0,0,1,0],[0,0,0,1]]]);
+  const paths=[[[[0,0,0,0],[0,1,0,0],[0,2,0,0]],[[0,0,0,0],[0,.5,0,0],[0,1,0,0]]]],vectors=[[[0,1,0,0],[0,2,0,0]]],connection=new Connection4(metric,{step:1e-4});
+  const transported=connection.parallelTransport(vectors,paths,{stepsPerSegment:16});
+  for(let family=0;family<2;family++)for(let sample=0;sample<2;sample++)for(let index=0;index<3;index++){
+    const k=[.2,.5][family],x=paths[0][sample][index][1],initial=vectors[0][sample][1],actual=transported[family][sample][index][1];
+    assert.ok(Math.abs(actual-initial*Math.exp(-k*x))<1e-8);
+    assert.ok(Math.abs(Math.exp(2*k*x)*actual*actual-initial*initial)<1e-7);
+  }
+  const reversed=paths.map(batch=>batch.map(path=>path.slice().reverse())),ends=transported.map(batch=>batch.map(path=>path.at(-1)));
+  const restored=connection.parallelTransport(ends,reversed,{stepsPerSegment:16});
+  for(let family=0;family<2;family++)for(let sample=0;sample<2;sample++)assert.ok(Math.abs(restored[family][sample].at(-1)[1]-vectors[0][sample][1])<1e-8);
+  const nonDiagonal=p=>[.1,.25].map(scale=>[[[-1,scale,0,0],[scale,2+p[1]**2,0,0],[0,0,1,0],[0,0,0,1]]]);
+  const familyResult=new Connection4(nonDiagonal,{step:1e-4}).parallelTransport([1,2,0,0],paths[0][0],{stepsPerSegment:4});
+  for(let family=0;family<2;family++){
+    const scalar=new Connection4(p=>nonDiagonal(p)[family][0],{step:1e-4}).parallelTransport([1,2,0,0],paths[0][0],{stepsPerSegment:4});
+    for(let n=0;n<scalar.length;n++)for(let component=0;component<4;component++)assert.ok(Math.abs(familyResult[family][0][n][component]-scalar[n][component])<1e-12);
+  }
+  assert.throws(()=>connection.parallelTransport(Array.from({length:3},()=>[[0,1,0,0]]),paths),/broadcast/);
+  const changing=new Connection4(p=>p[1]>.5?metric(p).slice(0,1):metric(p),{step:1e-4});
+  assert.throws(()=>changing.parallelTransport([0,1,0,0],[[0,0,0,0],[0,1,0,0]],{stepsPerSegment:2}),/metric callback batch shape must remain constant/);
+  const flat=[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],scalarToFamily=new Connection4(p=>p[1]>.5?[flat,flat]:flat,{step:1e-4});
+  assert.throws(()=>scalarToFamily.parallelTransport([0,1,0,0],[[0,0,0,0],[0,1,0,0]],{stepsPerSegment:2}),/metric callback batch shape must remain constant/);
+  let calls=0;const many=new Connection4(()=>{calls++;return Array.from({length:100},()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]);});
+  assert.throws(()=>many.parallelTransport([1,0,0,0],[[0,0,0,0],[1,0,0,0]],{stepsPerSegment:2}),/metric family exceeds the bounded work limit/);assert.equal(calls,1);
+});
+
+test("scalar parallel transport preserves metric callback counts and custom overrides",()=>{
+  let calls=0;const flat=()=>{calls++;return [[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];};
+  const path=[[0,0,0,0],[0,1,0,0],[0,2,0,0]],connection=new Connection4(flat);
+  assert.deepEqual(connection.parallelTransport([1,0,0,0],path,{stepsPerSegment:1}),Array.from({length:3},()=>[1,0,0,0]));assert.equal(calls,72);
+  const custom=new Connection4(()=>{throw new Error("metric must not be probed");}),gamma=Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0)));
+  custom.christoffel=()=>gamma;
+  assert.deepEqual(custom.parallelTransport([1,0,0,0],path,{stepsPerSegment:1}),Array.from({length:3},()=>[1,0,0,0]));
+  const customTransport=new Connection4(()=>{throw new Error("metric must not be probed");});customTransport._parallelTransportScalar=()=>["custom"];
+  assert.deepEqual(customTransport.parallelTransport([1,0,0,0],path),["custom"]);
+});
+
+test("covariant derivatives broadcast curved metric families and preserve variance",()=>{
+  let calls=0;const metric=p=>{calls++;return [.2,.5].map(k=>[[[-1,0,0,0],[0,Math.exp(2*k*p[1]),0,0],[0,0,1,0],[0,0,0,1]]]);};
+  const points=[[[0,1,0,0],[0,2,0,0]]],connection=new Connection4(metric,{step:1e-4});
+  const field=p=>[0,p[1],0,0],scalar=connection.covariantDerivative(p=>p[1]**2,points,[]);assert.equal(calls,18);
+  calls=0;const up=connection.covariantDerivativeVector(field,points);assert.equal(calls,18);
+  calls=0;const down=connection.covariantDerivative(field,points,["down"]);assert.equal(calls,18);
+  const mixed=connection.covariantDerivative(p=>Array.from({length:4},(_,i)=>Array.from({length:4},(_,j)=>i===1&&j===1?p[1]:0)),points,["up","down"]);
+  for(let family=0;family<2;family++)for(let sample=0;sample<2;sample++){
+    const k=[.2,.5][family],x=points[0][sample][1];
+    assert.ok(Math.abs(scalar[family][sample][1]-2*x)<1e-8);
+    assert.ok(Math.abs(up[family][sample][1][1]-(1+k*x))<1e-8);
+    assert.ok(Math.abs(down[family][sample][1][1]-(1-k*x))<1e-8);
+    assert.ok(Math.abs(mixed[family][sample][1][1][1]-1)<1e-8);
+  }
+  const offDiagonal=p=>[.1,.25].map(scale=>[[[-1,scale,0,0],[scale,2+p[1]**2,0,0],[0,0,1,0],[0,0,0,1]]]);
+  const batched=new Connection4(offDiagonal,{step:1e-4}).covariantDerivative(field,points,["down"]);
+  for(let family=0;family<2;family++)for(let sample=0;sample<2;sample++){
+    const expected=new Connection4(p=>offDiagonal(p)[family][0],{step:1e-4}).covariantDerivative(field,points[0][sample],["down"]);
+    for(let i=0;i<4;i++)for(let d=0;d<4;d++)assert.ok(Math.abs(batched[family][sample][i][d]-expected[i][d])<1e-12);
+  }
+  let fieldCalls=0;const oversized=new Connection4(()=>Array.from({length:900},()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]));
+  assert.throws(()=>oversized.covariantDerivative(p=>{fieldCalls++;return p[0];},[0,0,0,0],[]),/metric callback derivative batch exceeds/);assert.equal(fieldCalls,1);
+});
+
+test("custom connection methods retain their no-probe scalar behavior",()=>{
+  const fail=()=>{throw new Error("metric callback must not run");},gamma=Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0)));
+  gamma[1][1][1]=.5;
+  const direct=new Connection4(fail);direct.christoffel=()=>gamma;
+  assert.deepEqual(direct.geodesicAcceleration([0,0,0,0],[1,2,0,0]),[0,-2,0,0]);
+  assert.ok(Math.abs(direct.covariantDerivative(p=>p[1],[0,2,0,0],[])[1]-1)<1e-9);
+  assert.deepEqual(direct.covariantDerivativeForward(p=>p[1],[0,2,0,0],[]),[0,1,0,0]);
+  const scalar=new Connection4(fail);scalar._christoffelScalar=()=>gamma;
+  assert.equal(scalar.christoffel([0,0,0,0]),gamma);
+  assert.deepEqual(scalar.geodesicAcceleration([0,0,0,0],[1,2,0,0]),[0,-2,0,0]);
+  const customMetric=new Connection4(fail);customMetric._g=()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
+  assert.ok(customMetric.christoffel([0,0,0,0]).flat(2).every(value=>value===0));
+  const forward=new Connection4(fail,{metricDerivative:"forward"});forward.christoffelForward=()=>gamma;
+  assert.deepEqual(forward.geodesicAcceleration([0,0,0,0],[1,2,0,0]),[0,-2,0,0]);
+});
+
+test("forward endpoint sensitivity explicitly rejects callback metric families",()=>{
+  const flat=[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],family=()=>[flat,flat,flat,flat],point=[1,0,0,0];
+  const connection=new Connection4(family),forward=new Connection4(family,{metricDerivative:"forward"});
+  const scalar=connection.covariantDerivative(p=>p[0],point,[]),forwardScalar=forward.covariantDerivativeForward(p=>p[0],point,[]);
+  assert.equal(scalar.length,4);scalar.forEach(value=>assert.ok(Math.abs(value[0]-1)<1e-9));
+  assert.deepEqual(forwardScalar,Array.from({length:4},()=>[1,0,0,0]));
+  const transported=connection.parallelTransport([1,0,0,0],[[0,0,0,0],point]);
+  assert.deepEqual(transported,Array.from({length:4},()=>[[1,0,0,0],[1,0,0,0]]));
+  assert.throws(()=>new Geodesic4(forward,[0,0,0,0],[1,0,0,0]).endpointSensitivityForward([0,1],{steps:1}),/metric callback families.*connection derivatives/);
+});
+
+test("Geodesic4 integration broadcasts callback metric families across point batches",()=>{
+  const metric=(k,p)=>[[-1,0,0,0],[0,Math.exp(2*k*p[1]),0,0],[0,0,1,0],[0,0,0,1]],
+    family=p=>[.2,.5].map(k=>[metric(k,p)]),events=[[[0,0,0,0],[0,.2,0,0]]],tangents=[[[1,.5,0,0],[1,.4,0,0]]],geo=new Geodesic4(new Connection4(family),events,tangents),samples=geo.integrate([0,.4],{steps:8});
+  assert.equal(samples.at(-1).event.position.length,2);assert.equal(samples.at(-1).event.position[0].length,2);
+  for(let metricIndex=0;metricIndex<2;metricIndex++)for(let pointIndex=0;pointIndex<2;pointIndex++){
+    const k=metricIndex===0?.2:.5,scalar=new Geodesic4(new Connection4(p=>metric(k,p)),events[0][pointIndex],tangents[0][pointIndex]).integrate([0,.4],{steps:8});
+    for(let step=0;step<samples.length;step++){
+      const batched=samples[step].event.position[metricIndex][pointIndex],expected=scalar[step].event.position;
+      batched.forEach((value,axis)=>assert.ok(Math.abs(value-expected[axis])<1e-12));
+    }
+  }
+  const components=geo.integrate([0,.4],{steps:8,format:"components"});assert.deepEqual(components[1],samples.map(sample=>sample.event.position));
+  const flat=[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],changing=p=>Array.from({length:p[0]<.01?1:2},()=>flat);
+  assert.throws(()=>new Geodesic4(new Connection4(changing),[[0,0,0,0],[0,1,0,0]],[[1,0,0,0],[1,0,0,0]]).integrate([0,.2],{steps:2}),/metric callback batch shape must remain constant throughout Geodesic4 integration/);
+  assert.throws(()=>new Geodesic4(new Connection4(()=>[flat,flat]),[0,0,0,0],[1,0,0,0]).solveBoundary([1,0,0,0],[0,1],{steps:1,maxIterations:0}),/boundary shooting does not support callback metric-family batches/);
+});
+
+test("curvature operations broadcast callback metric families and point batches",()=>{
+  const diagonal=(k,x)=>[[-(1+k*x[1]*x[1]),0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],
+    family=x=>[.2,.5].map(k=>[diagonal(k,x)]),points=[[[0,.1,0,0],[0,.3,0,0]]],curvature=new Curvature4(family,{step:2e-4});
+  for(const name of ["riemann","ricci","ricciScalar","einsteinTensor","kretschmannScalar"]){
+    const actual=curvature[name](points);
+    assert.equal(actual.length,2,`${name} includes the metric-family axis`);
+    for(let metricIndex=0;metricIndex<2;metricIndex++)for(let pointIndex=0;pointIndex<2;pointIndex++){
+      const expected=new Curvature4(point=>diagonal(metricIndex===0?.2:.5,point),{step:2e-4})[name](points[0][pointIndex]);
+      assert.deepEqual(actual[metricIndex][pointIndex],expected,`${name} metric ${metricIndex}, point ${pointIndex}`);
+    }
+  }
+  const changing=new Curvature4(point=>point[1]<.2?[diagonal(.2,point)]:[diagonal(.2,point),diagonal(.5,point)]);
+  assert.throws(()=>changing.riemann(points),/metric callback batch shape must remain constant/);
+  let probes=0;const oversized=new Curvature4(point=>{probes++;return Array.from({length:257},()=>diagonal(.2,point));});
+  assert.throws(()=>oversized.riemann([0,.1,0,0]),/curvature batch exceeds the bounded component limit/);assert.equal(probes,1);
+});
+
+test("scalar metric callback preflight reuses the first finite stencil center",()=>{
+  let calls=0;const metric=()=>{calls++;return [[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];};
+  const ops=new DifferentialOperators4(metric),points=[[0,0,0,0],[1,0,0,0],[2,0,0,0]];
+  const result=ops.divergence(p=>[p[0],0,0,0],points);
+  result.forEach(value=>assert.ok(Math.abs(value-1)<1e-9));assert.equal(calls,9*points.length);
+});
+
+test("metric-dependent differential operators broadcast constant metric and point batches",()=>{
+  const diagonal=(a,b)=>[[-a,0,0,0],[0,b,0,0],[0,0,1,0],[0,0,0,1]];
+  const rawMetrics=[[diagonal(1,2)],[diagonal(4,4)]],points=[[[1,2,0,0],[2,3,0,0]]];
+  const scalar=p=>p[0]**2+3*p[1]**2,field=p=>[p[0],2*p[1],3*p[2],4*p[3]];
+  for(const metric of [rawMetrics,new Metric4(rawMetrics)]){
+    const ops=new DifferentialOperators4(metric,{step:1e-3});
+    const gradients=ops.gradient(scalar,points),divergences=ops.divergence(field,points),waves=ops.dAlembertian(scalar,points);
+    assert.equal(gradients.length,2);assert.equal(gradients[0].length,2);
+    for(let i=0;i<2;i++)for(let j=0;j<2;j++){
+      const t=points[0][j][0],x=points[0][j][1],a=i===0?1:4,b=i===0?2:4;
+      const expected=[-2*t/a,6*x/b,0,0];
+      gradients[i][j].forEach((value,k)=>assert.ok(Math.abs(value-expected[k])<1e-8));
+      assert.ok(Math.abs(divergences[i][j]-10)<1e-8);
+      assert.ok(Math.abs(waves[i][j]-(-2/a+6/b))<1e-6);
+    }
+    let calls=0;assert.throws(()=>ops.gradient(p=>{calls++;return p[0];},[[[0,0,0,0]],[[1,0,0,0]],[[2,0,0,0]]]),/broadcast/);assert.equal(calls,0);
+  }
+  const manyMetrics=Array.from({length:150},()=>[diagonal(1,1)]),manyPoints=[Array.from({length:150},()=>[0,0,0,0])];let calls=0;
+  assert.throws(()=>new DifferentialOperators4(manyMetrics).gradient(p=>{calls++;return p[0];},manyPoints),/bounded/);assert.equal(calls,0);
 });

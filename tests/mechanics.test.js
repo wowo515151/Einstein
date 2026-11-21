@@ -2,6 +2,23 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {C,Vector4,Covector4,Tensor4,FourVelocity,FourMomentum,FourCurrent,EMFieldTensor,MaxwellEquations,RetardedField,LorentzTransform,RelativityContext,Metric4} from "../src/relativity/index.js";
 
+test("electromagnetic field accessors use the configured c for explicit null",()=>{
+  const field=EMFieldTensor.fromEB([[2,0,0],[0,4,0]],[[0,1,0],[0,0,2]],{c:2});
+  assert.deepEqual(field.electricField(null),[[2,0,0],[0,4,0]]);
+  assert.deepEqual(field.invariants(null),field.invariants());
+  assert.deepEqual(field.electricField(1),[[1,0,0],[0,2,0]]);
+  assert.deepEqual(field.invariants(1),{magneticMinusElectricOverC2:[0,0],electricDotMagnetic:[0,0]});
+  assert.throws(()=>field.electricField(0),/positive/);
+});
+
+test("four-velocity and momentum expose their Lib4 component fields",()=>{
+  const velocity=new FourVelocity([[2,1,0,0]],{c:2}),momentum=new FourMomentum([[4,1,0,0]],{c:2});
+  assert.equal(velocity.u,velocity.components);assert.equal(momentum.p,momentum.components);
+  velocity.u[0][0]=4;momentum.p[0][0]=6;
+  assert.deepEqual(velocity.gamma(),[2]);assert.deepEqual(momentum.energy(),[12]);
+  assert.equal(Reflect.set(velocity,"u",[]),false);assert.equal(Reflect.set(momentum,"p",[]),false);
+});
+
 test("Maxwell vacuum plane wave converges under grid refinement",()=>{
   // E_x=cos(2π(y-t)), B_z=-E_x, with B sampled half a cell ahead.
   function error(n){
@@ -27,6 +44,14 @@ test("Maxwell evolution and residuals reject a missing grid spacing",()=>{
   assert.equal(constraints.gauss_e.length,2);assert.equal(constraints.gauss_b.length,1);
   assert.throws(()=>solver.maxwellResiduals(electric,magnetic,{spacing,dt:.1}),/spacing/);
   assert.throws(()=>solver.constraintResiduals(electric,magnetic,{spacing,dt:.1}),/spacing/);
+});
+test("Maxwell residuals accept one electric frame with an empty magnetic history",()=>{
+  const field=value=>Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[value,0,0]))),current=Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[0,0,0,0]))),solver=new MaxwellEquations({c:1,epsilon0:1});
+  assert.deepEqual(solver.maxwellResiduals([field(0)],[],{spacing:[1,1,1],dt:.1}),{ampere:[],faraday:[]});
+  assert.deepEqual(solver.maxwellResiduals([[field(0),field(1)]],[],{spacing:[1,1,1],dt:.1,current:[current,current]}),{ampere:[],faraday:[]});
+  assert.throws(()=>solver.maxwellResiduals([field(0)],[],{spacing:[1,1,1],dt:.1,current:current.slice(0,1)}),/current grid/);
+  assert.throws(()=>solver.maxwellResiduals([field(0),field(1)],[],{spacing:[1,1,1],dt:.1}),/history/);
+  assert.throws(()=>solver.constraintResiduals([field(0)],[],{spacing:[1,1,1],dt:.1}),/history/);
 });
 test("Maxwell CFL check handles very small coordinate scales",()=>{
   const grid=Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[0,0,0])));
@@ -189,6 +214,13 @@ test("four-momentum mass survives overflowing component-to-c ratios",()=>{
   const mass=new FourMomentum([1,near,0,0],{c}).invariantMass();assert.ok(Math.abs(mass/expected-1)<1e-14);
   assert.throws(()=>new FourMomentum([1,0,0,0],{c}).invariantMass(),/non-finite/);
 });
+test("four-momentum mass recovers when the unscaled norm underflows",()=>{
+  const c=1e-100,p=new FourMomentum([[1e-200,0,0,0],[1e-200,6e-201,0,0],[1e-200,1e-200,0,0]],{c});
+  const masses=p.invariantMass();
+  assert.ok(Math.abs(masses[0]/1e-100-1)<1e-14);
+  assert.ok(Math.abs(masses[1]/8e-101-1)<1e-14);
+  assert.equal(masses[2],0);
+});
 test("four-momentum and four-velocity accessors validate mutable data and outputs",()=>{
   assert.throws(()=>new FourMomentum([1e308,0,0,0],{c:2}).energy(),/energy is non-finite/);
   assert.throws(()=>new FourVelocity([1,0,0,0],{c:1e-309}).gamma(),/gamma is non-finite/);
@@ -266,14 +298,20 @@ test("relativity context propagates unit constants and validates shared configur
   assert.equal(si.createEMFieldTensor([0,0,0],[0,0,1]).epsilon0,2);
   const naturalFromSI=si.setUnits("natural");
   assert.equal(naturalFromSI.c,1);assert.equal(naturalFromSI.epsilon0,1/(4*Math.PI));assert.equal(naturalFromSI.units,"natural");
+  assert.equal(si.setUnits("natural",{c:null}).c,1);assert.equal(natural.setUnits("SI",{c:null}).c,C);
   const customSI=naturalFromSI.setUnits("SI",{c:2,epsilon0:3});
   assert.equal(customSI.c,2);assert.equal(customSI.epsilon0,3);assert.equal(customSI.units,"SI");
   assert.throws(()=>si.setUnits("unsupported"),/units must be SI or natural/);
   const deviceView=customSI.toDevice("webgpu");
   assert.notEqual(deviceView,customSI);assert.equal(deviceView.device,"webgpu");
-  assert.equal(deviceView.c,customSI.c);assert.equal(deviceView.epsilon0,customSI.epsilon0);assert.equal(deviceView.metric,customSI.metric);
+  assert.equal(deviceView.c,customSI.c);assert.equal(deviceView.epsilon0,customSI.epsilon0);assert.notEqual(deviceView.metric,customSI.metric);assert.equal(deviceView.metric.components,customSI.metric.components);
   const metric=new Metric4([[-1,0,0,0],[0,2,0,0],[0,0,3,0],[0,0,0,4]]);
-  assert.equal(new RelativityContext({metric}).metric,metric);
+  const original=new RelativityContext({metric}),changed=original.setUnits("natural");
+  assert.notEqual(original.metric,metric);assert.notEqual(changed.metric,original.metric);assert.equal(original.metric.components,metric.components);assert.equal(changed.metric.components,metric.components);
+  metric.components[1][1]=5;assert.equal(changed.metric.g[1][1],5);
+  changed.metric.g=[[-1,0,0,0],[0,7,0,0],[0,0,3,0],[0,0,0,4]];
+  assert.equal(original.metric.g[1][1],5);assert.equal(metric.g[1][1],5);assert.equal(changed.metric.g[1][1],7);
+  metric.components[1][1]=0;assert.throws(()=>new RelativityContext({metric}),/singular/);
   assert.throws(()=>new RelativityContext({c:Number.NaN}),/finite/);
   assert.throws(()=>new RelativityContext({epsilon0:0}),/epsilon0 must be positive/);
   assert.throws(()=>new RelativityContext({metric:[[1,0,0,0],[0,0,0,0],[0,0,1,0],[0,0,0,1]]}),/singular/);
@@ -284,6 +322,7 @@ test("relativity context factories construct algebra and mechanics values with s
   assert.ok(context.createCovector([1,2,3,4]) instanceof Covector4);
   const values=Array.from({length:4},(_,i)=>Array.from({length:4},(_,j)=>i===j?1:0));
   assert.ok(context.createTensor(values,["up","down"]) instanceof Tensor4);
+  assert.deepEqual(context.createTensor(values,null).indexTypes,["up","up"]);
   const directVelocity=context.createFourVelocity([2,0,0,0]);assert.equal(directVelocity.c,2);assert.equal(directVelocity.validate(),true);
   const derivedVelocity=context.fourVelocityFromVelocity3([.5,0,0]);assert.equal(derivedVelocity.c,2);assert.ok(Math.abs(derivedVelocity.components[0]-2/Math.sqrt(1-.25**2))<1e-12);
   const directMomentum=context.createFourMomentum([6,0,0,0]);assert.equal(directMomentum.invariantMass(),3);
@@ -382,6 +421,14 @@ test("electromagnetic invariants avoid unnecessary c-squared overflow and underf
   const balanced=EMFieldTensor.fromEB([1e200,0,0],[0,1e200,0],{c:1});
   assert.deepEqual(balanced.invariants(),{magneticMinusElectricOverC2:0,electricDotMagnetic:0});
 });
+test("electromagnetic scalar invariant retains small residuals across extreme scales",()=>{
+  const small=EMFieldTensor.fromEB([0,0,0],[1e-162,1e-162,1e-162],{c:1});
+  assert.equal(small.invariants().magneticMinusElectricOverC2,Number.MIN_VALUE);
+  const negative=EMFieldTensor.fromEB([1e-162,1e-162,1e-162],[0,0,0],{c:1});
+  assert.equal(negative.invariants().magneticMinusElectricOverC2,-Number.MIN_VALUE);
+  const cancel=EMFieldTensor.fromEB([0,1,1e200],[1e200,2,0],{c:1});
+  assert.equal(cancel.invariants().magneticMinusElectricOverC2,3);
+});
 test("electromagnetic pseudoscalar survives unrepresentable electric intermediates",()=>{
   const a=1e200,b=1e200,orthogonal=new EMFieldTensor([[0,a,0,0],[-a,0,0,-b],[0,0,0,0],[0,b,0,0]],{c:1e200});
   assert.deepEqual(orthogonal.invariants(),{magneticMinusElectricOverC2:0,electricDotMagnetic:0});
@@ -420,6 +467,8 @@ test("electromagnetic tensor batches construction, invariants, dual, force, and 
   const transforms=[LorentzTransform.boost([.1,0,0]).matrix,LorentzTransform.boost([0,.2,0]).matrix],transformed=field.transform(transforms);
   for(let n=0;n<2;n++)assert.deepEqual(transformed.components[n],new EMFieldTensor(field.components[n],{c:1,epsilon0:2}).transform(transforms[n]).components);
   const force=field.lorentzForce([2,3],[[-1,1,0,0],[-2,0,1,0]]);assert.equal(force.length,2);assert.deepEqual(force[0],new EMFieldTensor(field.components[0],{c:1}).lorentzForce(2,[-1,1,0,0]));
+  assert.deepEqual(field.lorentzForce([2,3],new Covector4([[-1,1,0,0],[-2,0,1,0]])),force);
+  assert.throws(()=>field.lorentzForce(1,new Vector4([1,0,0,0])),/finite/);
   const stress=field.energyMomentumTensor();for(let n=0;n<2;n++)assert.deepEqual(stress[n],new EMFieldTensor(field.components[n],{c:1,epsilon0:2}).energyMomentumTensor());
   const metrics=[[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],[[-1,0,0,0],[0,2,0,0],[0,0,3,0],[0,0,0,4]]],curvedStress=field.energyMomentumTensor(metrics);
   for(let n=0;n<2;n++)assert.deepEqual(curvedStress[n],new EMFieldTensor(field.components[n],{c:1,epsilon0:2}).energyMomentumTensor(metrics[n]));
@@ -450,12 +499,71 @@ test("electromagnetic dual, Lorentz force, and stress-energy obey the declared c
   assert.throws(()=>field.transform([[2,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]),RangeError);
   assert.throws(()=>field.lorentzForce(Infinity,[-2,1,0,0]),TypeError);
 });
+test("electromagnetic stress-energy is symmetric, traceless, and Lorentz covariant",()=>{
+  const field=EMFieldTensor.fromEB([1,.4,-.7],[.2,-.8,.5],{c:1,epsilon0:2});
+  const boost=LorentzTransform.boost([.2,-.3,.1]),matrix=boost.matrix;
+  const tensor=field.energyMomentumTensor(),boosted=field.transform(boost).energyMomentumTensor();
+  let trace=0;
+  for(let i=0;i<4;i++){
+    trace+=(i===0?-1:1)*tensor[i][i];
+    for(let j=0;j<4;j++){
+      assert.ok(Math.abs(tensor[i][j]-tensor[j][i])<1e-12);
+      let expected=0;
+      for(let a=0;a<4;a++)for(let b=0;b<4;b++)expected+=matrix[i][a]*matrix[j][b]*tensor[a][b];
+      assert.ok(Math.abs(boosted[i][j]-expected)<1e-12,`component ${i},${j}`);
+    }
+  }
+  assert.ok(Math.abs(trace)<1e-12);
+});
 test("Maxwell stress-energy delegates with matching physical constants",()=>{
   const field=EMFieldTensor.fromEB([1,0,0],[0,0,0],{c:2,epsilon0:3});
   const solver=new MaxwellEquations({c:2,epsilon0:3});
   assert.deepEqual(solver.energyMomentumTensor(field),field.energyMomentumTensor());
   assert.throws(()=>solver.energyMomentumTensor([0,0,0,0]),/fieldTensor must be an EMFieldTensor/);
   assert.throws(()=>new MaxwellEquations({c:1,epsilon0:3}).energyMomentumTensor(field),/share physical constants/);
+});
+test("Maxwell directional evolution matches finite perturbations of fields and current",()=>{
+  const grid=fn=>Array.from({length:2},(_,i)=>Array.from({length:2},(_,j)=>Array.from({length:2},(_,k)=>fn(i,j,k))));
+  const E=grid((i,j,k)=>[.2*i,.3*j,.1*k]),B=grid((i,j,k)=>[.1*j,-.2*k,.15*i]);
+  const dE=grid((i,j,k)=>[.1+j,.2-k,.3+i]),dB=grid((i,j,k)=>[.3-k,.1+i,-.2+j]);
+  const J=grid((i,j,k)=>[0,.2*i,-.1*j,.3*k]),dJ=grid((i,j,k)=>[3+.5*i,.1+i,.2+j,-.1+k]);
+  const combine=(a,b,factor)=>Array.isArray(a)?a.map((value,index)=>combine(value,b[index],factor)):a+factor*b;
+  const solver=new MaxwellEquations({c:1,epsilon0:2}),options={spacing:[1,1,1],dt:.05,steps:3,current:J,currentDirection:dJ};
+  const {values,direction}=solver.evolveDirectional(E,B,dE,dB,options),h=1e-5;
+  const plus=solver.evolve(combine(E,dE,h),combine(B,dB,h),{...options,current:combine(J,dJ,h)});
+  const minus=solver.evolve(combine(E,dE,-h),combine(B,dB,-h),{...options,current:combine(J,dJ,-h)});
+  assert.deepEqual(values[0],direction[0]);assert.deepEqual(values[2],direction[2]);
+  for(const index of [1,3]){
+    const a=plus[index].flat(Infinity),b=minus[index].flat(Infinity),actual=direction[index].flat(Infinity);
+    actual.forEach((value,i)=>assert.ok(Math.abs(value-(a[i]-b[i])/(2*h))<1e-9));
+  }
+  const constraints=solver.constraintResiduals(direction[1],direction[3],{dt:options.dt,spacing:options.spacing,current:dJ});
+  const plusConstraints=solver.constraintResiduals(plus[1],plus[3],{dt:options.dt,spacing:options.spacing,current:combine(J,dJ,h)});
+  const minusConstraints=solver.constraintResiduals(minus[1],minus[3],{dt:options.dt,spacing:options.spacing,current:combine(J,dJ,-h)});
+  for(const key of ["gauss_e","gauss_b"]){
+    const a=plusConstraints[key].flat(Infinity),b=minusConstraints[key].flat(Infinity);
+    constraints[key].flat(Infinity).forEach((value,i)=>assert.ok(Math.abs(value-(a[i]-b[i])/(2*h))<1e-9));
+  }
+  const batched=solver.evolveDirectional([E,E],[B,B],[dE,dE],[dB,dB],{...options,current:[J,J],currentDirection:[dJ,dJ]});
+  for(const index of [1,3])for(let t=0;t<direction[index].length;t++){
+    assert.deepEqual(batched.direction[index][t][0],direction[index][t]);
+    assert.deepEqual(batched.direction[index][t][1],direction[index][t]);
+  }
+  assert.throws(()=>solver.evolveDirectional(E,B,[dE],dB,options),/matching grid and batch shapes/);
+});
+test("Maxwell directional evolution responds analytically to uniform current",()=>{
+  const grid=value=>Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>value.slice())));
+  const zero=grid([0,0,0]),currentDirection=new FourCurrent(grid([14,2,0,0]),{c:2});
+  const solver=new MaxwellEquations({c:2,epsilon0:2});
+  const {values,direction}=solver.evolveDirectional(zero,zero,zero,zero,{dt:.1,steps:2,currentDirection});
+  assert.deepEqual(values[1].at(-1)[0][0][0],[0,0,0]);
+  assert.ok(Math.abs(direction[1][1][0][0][0][0]+.1)<1e-15);
+  assert.ok(Math.abs(direction[1][2][0][0][0][0]+.2)<1e-15);
+  assert.ok(direction[3].flat(Infinity).every(value=>value===0));
+  const constraints=solver.constraintResiduals(direction[1],direction[3],{dt:.1,current:currentDirection});
+  assert.ok(constraints.gauss_e.flat(Infinity).every(value=>Math.abs(value+3.5)<1e-15));
+  assert.ok(constraints.gauss_b.flat(Infinity).every(value=>value===0));
+  assert.throws(()=>solver.evolveDirectional(zero,zero,zero,zero,{dt:.1,currentDirection:new FourCurrent(grid([0,1,0,0]),{c:1})}),/same c/);
 });
 test("Maxwell Yee evolution staggers fields in time and residuals match the update",()=>{
   const fill=Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[0,0,0])));

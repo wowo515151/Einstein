@@ -163,8 +163,8 @@ export async function createViewerWithRuntime(container, definition, runtime) {
     listeners.push(() => target.removeEventListener(type, callback, options));
   }
 
-  function report(error) {
-    try { callbacks.onError?.(error); } catch { /* User callbacks must not break cleanup. */ }
+  function report(error, details) {
+    try { callbacks.onError?.(error, details); } catch { /* User callbacks must not break cleanup. */ }
   }
 
   function cleanup({ initializing = false } = {}) {
@@ -448,7 +448,7 @@ export async function createViewerWithRuntime(container, definition, runtime) {
         try {
           await plotterInstance.update(data, configuration);
         } catch (error) {
-          report(error);
+          report(error, { operation: "update" });
           throw error;
         }
         render();

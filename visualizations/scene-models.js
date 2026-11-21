@@ -198,7 +198,7 @@ function scenePoints(sceneId, time, beta, observerFrame = "lab") {
     }));
   }
   if (sceneId === "twins") {
-    const count = 140, travelerRate = new SpacetimeInterval([1,beta,0,0], {c:1}).properTime();
+    const count = 141, travelerRate = new SpacetimeInterval([1,beta,0,0], {c:1,atol:0}).properTime();
     return Array.from({ length: count * 2 }, (_, index) => {
       const observer = index < count ? "stay-home" : "traveler";
       const sample = index % count;
@@ -286,7 +286,7 @@ function scenePoints(sceneId, time, beta, observerFrame = "lab") {
       }
       geodesicCache = { beta, paths };
     }
-    const last = Math.max(0, Math.ceil(time * 38));
+    const last = Math.max(0, Math.floor(time * 38));
     return geodesicCache.paths.flatMap((path) => path.slice(0, last + 1).map((row) => ({
       ...row,
       tangent: row.tangent.slice(),
@@ -355,7 +355,7 @@ export function twinClockReadings(beta, time = 1) {
   if (beta < 0 || beta >= 1) throw new RangeError("beta must be in [0, 1)");
   if (time < 0 || time > 1) throw new RangeError("time must be in [0, 1]");
   const elapsed = 4 * time;
-  const leg = new SpacetimeInterval([1, beta, 0, 0], { c: 1 });
+  const leg = new SpacetimeInterval([1, beta, 0, 0], { c: 1, atol: 0 });
   return Object.freeze({
     stayHome: elapsed,
     traveler: elapsed * leg.properTime(),

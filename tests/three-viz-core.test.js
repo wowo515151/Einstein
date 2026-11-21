@@ -3,6 +3,7 @@ import test from "node:test";
 import { createViewerWithRuntime } from "../src/three-viz/core/mount.js";
 import { createResourceRegistry } from "../src/three-viz/core/resource-registry.js";
 import { pointCloudPlotter } from "../src/three-viz/plotters/point-cloud-plotter.js";
+import { mount, createCarPaintMaterial } from "einstein-relativity-local/three-viz";
 
 class FakeVector3 {
   constructor(x=0,y=0,z=0){this.set(x,y,z);}
@@ -41,6 +42,11 @@ function makeContainer(){
   return container;
 }
 
+test("package exposes the copied ThreeViz public entry point",()=>{
+  assert.equal(typeof mount,"function");
+  assert.equal(typeof createCarPaintMaterial,"function");
+});
+
 test("ThreeViz viewer mounts, updates, and disposes its renderer and canvas once",async()=>{
   const {runtime,state}=makeRuntime(),container=makeContainer();
   let plotterDisposals=0,updates=0,context;
@@ -59,6 +65,15 @@ test("ThreeViz viewer cleans initialized core resources when plotter setup fails
   const definition={configuration:{},plotter:{create(){throw setupFailure;}}};
   await assert.rejects(createViewerWithRuntime(container,definition,runtime),error=>error.code==="MOUNT_FAILED"&&error.cause===setupFailure);
   assert.equal(state.rendererDisposals,1);assert.equal(container.children.length,0);
+});
+
+test("viewer update errors retain callback reporting with operation context",async()=>{
+  const {runtime}=makeRuntime(),container=makeContainer(),failure=new Error("update failed"),reports=[];
+  const definition={configuration:{},callbacks:{onError(error,details){reports.push({error,details});}},plotter:{create(){return {update(){throw failure;},dispose(){}};}}};
+  const viewer=await createViewerWithRuntime(container,definition,runtime);
+  await assert.rejects(viewer.update({}),error=>error===failure);
+  assert.deepEqual(reports,[{error:failure,details:{operation:"update"}}]);
+  viewer.dispose();
 });
 
 test("selection passes overlay hits and reports the first selectable point",async()=>{

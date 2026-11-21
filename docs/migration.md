@@ -10,7 +10,7 @@ Leading array dimensions are supported and broadcast only for operations that do
 
 ## Names and accessors
 
-Python snake_case methods generally map to camelCase. JavaScript uses method calls for several values exposed as Python properties:
+Python snake_case methods generally map to camelCase. See the [instance field map](lib4-fields.md) for renamed fields and mutation differences. JavaScript uses method calls for several values exposed as Python properties:
 
 | Lib4 name | JavaScript equivalent | Notes |
 | --- | --- | --- |

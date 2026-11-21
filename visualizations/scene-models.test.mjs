@@ -37,6 +37,22 @@ test("twin paths and markers use distinct consistent colors",()=>{
   assert.notEqual(twinPathColor("stay-home clock"),twinPathColor("traveler clock"));
 });
 
+test("twin clocks accept representable speeds arbitrarily close to light speed",()=>{
+  const beta=1-Number.EPSILON,readings=twinClockReadings(beta,1),rows=buildSceneData("twins",{beta,time:1});
+  const expected=4*Math.sqrt((1-beta)*(1+beta));
+  assert.ok(Math.abs(readings.traveler-expected)<expected*1e-12);
+  assert.ok(Math.abs(rows.at(-1).properTime-expected)<expected*1e-12);
+  assert.equal(readings.stayHome,4);
+});
+
+test("lensing playback does not reveal samples beyond the selected parameter",()=>{
+  for(const time of [.001,.2,.5,1]){
+    const rows=buildSceneData("geodesic",{beta:.4,time});
+    assert.equal(rows.filter(row=>row.parameter===0).length,8);
+    assert.ok(rows.every(row=>row.parameter<=6*time+1e-12));
+  }
+});
+
 test("viewer update reports failures only while the page is active", async () => {
   const reports = [], error = new Error("renderer unavailable"), viewer = { update: async () => { throw error; } };
   await updateViewer(viewer, {}, { isClosed: () => false, report: e => reports.push(e) });
@@ -457,8 +473,11 @@ test("twin paths reunite and proper times use the library interval", () => {
   const traveler = samples.filter((row) => row.id.startsWith("traveler-"));
   for(const index of [0,home.length-1]){for(const axis of ["x","y","z"])assert.equal(home[index][axis],traveler[index][axis]);}
   assert.notEqual(home[70].z,traveler[70].z);
-  assert.equal(home.length, 140);
-  assert.equal(traveler.length, 140);
+  assert.equal(home.length, 141);
+  assert.equal(traveler.length, 141);
+  const turn=traveler.find(row=>row.ct===2),marker=twinClockPositions(beta,.5)[1];
+  assert.ok(turn);assert.equal(turn.worldlineX,2*beta);
+  for(const axis of ["x","y","z"])assert.equal(turn[axis],marker[axis]);
   assert.equal(home[0].x, home.at(-1).x);
   assert.equal(traveler[0].x, traveler.at(-1).x);
   assert.equal(samples.filter((row) => row.y === -2).length, 2);

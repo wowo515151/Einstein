@@ -2,11 +2,41 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {Vector4,Covector4,Matrix4,Metric4,Tensor4,Bivector4,LeviCivita4,LorentzTransform,PoincareTransform,minkowskiDot,fromThreeVector3,toThreeVector3,fromThreeVector4,toThreeVector4,fromThreeMatrix4,toThreeMatrix4} from "../src/relativity/index.js";
 import * as publicApi from "../src/relativity/index.js";
+import * as packageApi from "einstein-relativity-local";
 
 test("public entry point exposes validated products without internal primitives",()=>{
   assert.equal(typeof publicApi.minkowskiDot,"function");
+  assert.equal(packageApi.Vector4,publicApi.Vector4);
+  assert.equal(packageApi.minkowskiDot([2,1,0,0],[2,1,0,0]),-3);
   assert.equal("weightedDot4" in publicApi,false);
   assert.equal("metricDot4" in publicApi,false);
+});
+
+test("explicit null selects the default metric across the algebra family",()=>{
+  const v=new Vector4([2,1,0,0]),w=new Vector4([3,0,1,0]);
+  assert.equal(v.dot(w,null),-6);assert.equal(v.normSquared(null),-3);
+  assert.equal(v.causalType(null),Vector4.CAUSAL_TIMELIKE);
+  assert.deepEqual(v.normalizeTimelike(null).components,v.normalizeTimelike().components);
+  assert.deepEqual(v.lowerIndex(null).components,[-2,1,0,0]);
+  assert.deepEqual(new Covector4([-2,1,0,0]).raiseIndex(null).components,[2,1,0,0]);
+  const tensor=new Tensor4([1,2,3,4],["up"]);
+  assert.deepEqual(tensor.lowerIndex(0,null).components,[-1,2,3,4]);
+  assert.deepEqual(tensor.lowerIndex(0).raiseIndex(0,null).components,[1,2,3,4]);
+  const bivector=v.wedge(w);
+  assert.deepEqual(bivector.invariants(null),bivector.invariants());
+  assert.deepEqual(bivector.dual(null).components,bivector.dual().components);
+  assert.deepEqual(new LeviCivita4(null).epsilon(),new LeviCivita4().epsilon());
+  assert.throws(()=>v.dot(w,false));
+});
+
+test("tensor index defaults accept null and empty lists when rank is unambiguous",()=>{
+  const vector=[1,2,3,4],matrix=Array.from({length:4},(_,i)=>vector.map(value=>value+i));
+  for(const types of [undefined,null,[]]){
+    assert.deepEqual(new Tensor4(vector,types).indexTypes,["up"]);
+    assert.deepEqual(new Tensor4(matrix,types).indexTypes,["up","up"]);
+    assert.throws(()=>new Tensor4([vector,vector],types),/indexTypes is required/);
+  }
+  assert.deepEqual(new Tensor4([vector,vector],["down"]).batchShape,[2]);
 });
 
 test("algebra inputs reject sparse components and sparse batches",()=>{
@@ -33,10 +63,10 @@ test("broadcast algebra rejects oversized outputs before allocation",()=>{
   const vectors=new Vector4(column),other=new Vector4(row),covectors=new Covector4(column);
   assert.throws(()=>vectors.add(other),/component limit/);
   assert.throws(()=>vectors.subtract(other),/component limit/);
-  assert.throws(()=>vectors.scale([Array(1001).fill(1)]),/component limit/);
+  assert.throws(()=>vectors.scale([Array.from({length:1001},()=>[1])]),/component limit/);
   assert.throws(()=>vectors.dot(other),/component limit/);
   assert.throws(()=>covectors.add(new Covector4(row)),/component limit/);
-  assert.throws(()=>covectors.scale([Array(1001).fill(1)]),/component limit/);
+  assert.throws(()=>covectors.scale([Array.from({length:1001},()=>[1])]),/component limit/);
   assert.throws(()=>covectors.pair(other),/component limit/);
   const smallColumn=new Vector4(Array.from({length:501},()=>[[2,0,0,0]]));
   const metricGrid=Metric4.minkowski({batchShape:[1,501]});
@@ -118,6 +148,18 @@ test("determinant avoids intermediate overflow and underflow when the final valu
     const matrix=new Matrix4(diagonal.map((value,i)=>diagonal.map((_,j)=>i===j?value:0)));
     assert.ok(Math.abs(matrix.determinant()-1)<1e-12);
   }
+  const matrix=new Matrix4([[1e308,1e308,0,0],[1e308,-1e308,0,0],[0,0,1e-308,0],[0,0,0,1e-308]]);
+  assert.ok(Math.abs(matrix.determinant()+2)<1e-12);
+  const reordered=new Matrix4([matrix.components[1],matrix.components[0],matrix.components[2],matrix.components[3]]);
+  assert.ok(Math.abs(reordered.determinant()-2)<1e-12);
+  const inv=matrix.inverse().components;
+  assert.ok(Math.abs(inv[0][0]/5e-309-1)<1e-12);assert.ok(Math.abs(inv[0][1]/5e-309-1)<1e-12);
+  assert.ok(Math.abs(inv[1][0]/5e-309-1)<1e-12);assert.ok(Math.abs(inv[1][1]/-5e-309-1)<1e-12);
+  const product=matrix.multiply(new Matrix4(inv)).components;
+  product.forEach((row,i)=>row.forEach((value,j)=>assert.ok(Math.abs(value-(i===j?1:0))<1e-12)));
+  const epsilon=new LeviCivita4(new Metric4(matrix.components));
+  assert.ok(Math.abs(epsilon.epsilon("down")[0][1][2][3]+Math.SQRT2)<1e-12);
+  assert.ok(Math.abs(epsilon.epsilon("up")[0][1][2][3]-1/Math.SQRT2)<1e-12);
 });
 
 test("Three.js adapters copy vector values and transpose Matrix4 storage conventions",()=>{
@@ -372,7 +414,7 @@ test("Vector4 shape and Covector4 broadcast algebra, causal classification, and 
   assert.deepEqual(values.shape,[2,4]);assert.deepEqual(offset.shape,[4]);assert.ok(Object.isFrozen(values.shape));
   assert.deepEqual(values.add(offset).components,[[3,1,0,0],[1,2,0,0]]);
   assert.deepEqual(values.subtract(offset).components,[[1,1,0,0],[-1,2,0,0]]);
-  assert.deepEqual(values.scale([2,.5]).components,[[4,2,0,0],[0,1,0,0]]);
+  assert.deepEqual(values.scale([[2],[.5]]).components,[[4,2,0,0],[0,1,0,0]]);
   assert.deepEqual(values.dot(values),[-3,4]);
   assert.deepEqual(values.causalType(),[Vector4.CAUSAL_TIMELIKE,Vector4.CAUSAL_SPACELIKE]);
   assert.deepEqual(values.causalName(),["timelike","spacelike"]);
@@ -394,6 +436,8 @@ test("proper spatial rotations embed in Lorentz group and reflections reject",()
   assert.ok(LorentzTransform.rotation(nearRotation).validate());
   assert.throws(()=>LorentzTransform.rotation(nearRotation,{atol:0}),RangeError);
   assert.throws(()=>LorentzTransform.rotation(nearRotation,{atol:-1}),RangeError);
+  assert.throws(()=>LorentzTransform.rotation([[1e200,0,0],[0,1e200,0],[0,0,1e200]],{atol:1e308}),/proper orthogonal/);
+  assert.throws(()=>LorentzTransform.rotation([[1e150,0,0],[0,1e150,0],[0,0,1e150]],{atol:1e308}),/proper orthogonal/);
 });
 test("rapidity boosts agree with beta boosts",()=>{
   const beta=.4,rapid=Math.atanh(beta);
@@ -638,4 +682,21 @@ test("Levi-Civita tensor scales with a custom metric determinant",()=>{
   assert.deepEqual(new LeviCivita4(metric,-1).dual(bivector).components,bivector.dual(metric,-1).components);
   assert.throws(()=>epsilon.epsilon("side"),TypeError);
   assert.throws(()=>new LeviCivita4(metric,0),RangeError);
+});
+
+test("vector and covector scale broadcast across component axes like Lib4",()=>{
+  for(const Type of [Vector4,Covector4]){
+    const v=new Type([1,2,3,4]);
+    assert.deepEqual(v.scale(2).components,[2,4,6,8]);
+    assert.deepEqual(v.scale([2,3,4,5]).components,[2,6,12,20]);
+    const batch=new Type([[1,2,3,4],[5,6,7,8]]);
+    assert.deepEqual(batch.scale([[2],[3]]).components,[[2,4,6,8],[15,18,21,24]]);
+    assert.deepEqual(batch.scale([1,2,3,4]).components,[[1,4,9,16],[5,12,21,32]]);
+    assert.deepEqual(v.scale([[[2]],[[3]]]).components,[[[2,4,6,8]],[[3,6,9,12]]]);
+    assert.throws(()=>batch.scale([2,3]),/broadcast-compatible/);
+    assert.deepEqual(v.scale(new Float64Array([2,3,4,5])).components,[2,6,12,20]);
+    assert.deepEqual(batch.scale([new Float32Array([2]),new Float32Array([3])]).components,[[2,4,6,8],[15,18,21,24]]);
+    assert.throws(()=>v.scale([]),/broadcast-compatible/);
+    assert.throws(()=>v.scale(Array(4)),/finite/);
+  }
 });

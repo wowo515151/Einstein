@@ -40,6 +40,7 @@ const playback = createPlaybackController({
     playButton.textContent = playing ? "Pause animation" : "Play animation";
   },
   onFrame(next) { time = next; timeSlider.value = String(next); updateRows(); },
+  onError(error) { status.textContent = `Animation stopped: ${error.message}`; },
 });
 
 function updateDescription() {
@@ -77,8 +78,9 @@ function updateModelReadout(rows) {
   if (activeScene.id === "minkowski") {
     const marker = selectedWorldlineEvents("minkowski", beta, time, observerFrame)[1];
     const observed = new Vector4([marker.y, marker.x, 0, 0]);
-    const classification = marker.x === 0 && marker.y === 0 ? "coincident with the origin" : observed.causalName();
-    readout.textContent = `${observerFrame === "moving" ? "Moving observer frame" : "Laboratory frame"}: the moving worldline is ${observerFrame === "moving" ? "at rest" : "x = βct"}. Markers show events at laboratory ct = ${(4*time-2).toFixed(2)}. Moving marker: s² = ${observed.normSquared().toFixed(4)}; ${classification}.`;
+    const classification = marker.x === 0 && marker.y === 0 ? "coincident with the origin" : observed.causalName(undefined, 0);
+    const squared = observed.normSquared(), displayedSquared = squared !== 0 && Math.abs(squared) < .00005 ? squared.toExponential(3) : squared.toFixed(4);
+    readout.textContent = `${observerFrame === "moving" ? "Moving observer frame" : "Laboratory frame"}: the moving worldline is ${observerFrame === "moving" ? "at rest" : "x = βct"}. Markers show events at laboratory ct = ${(4*time-2).toFixed(2)}. Moving marker: s² = ${displayedSquared}; ${classification}.`;
   } else if (activeScene.id === "light-cone") {
     const samples = rows;
     const first = samples[0];
@@ -88,7 +90,7 @@ function updateModelReadout(rows) {
       readout.textContent = `Library check: the apex is coincident with the origin; an event at r = 1 is ${outside}.`;
     } else {
       const radius = Math.abs(first.ct), surface = new Vector4([first.ct, first.x, first.y, first.z]).causalName();
-      const inside = new Vector4([first.ct, 0, 0, 0]).causalName(), outside = new Vector4([first.ct, 2 * radius, 0, 0]).causalName();
+      const inside = new Vector4([first.ct, 0, 0, 0]).causalName(undefined, 0), outside = new Vector4([first.ct, 2 * radius, 0, 0]).causalName(undefined, 0);
       const displayedCt = radius < .0005 ? first.ct.toExponential(3) : first.ct.toFixed(3);
       readout.textContent = `Library check: ${samples.length} ${branch} surface samples; ct = ${displayedCt}, surface ${surface}; r = 0 ${inside}, r = 2|ct| ${outside}.`;
     }
@@ -146,7 +148,8 @@ export function drawSceneOverlays(context, sceneId, rows, colors, frame = { time
       const distinct = distinctPathPoints(group);
       if (distinct.length < 2) continue;
       const points = distinct.map(({ x, y, z }) => new THREE.Vector3(x, y, z));
-      const curve = new THREE.CatmullRomCurve3(points, false, "centripetal");
+      const curve = sceneId === "twins" ? new THREE.CurvePath() : new THREE.CatmullRomCurve3(points, false, "centripetal");
+      if (sceneId === "twins") for (let i = 1; i < points.length; i++) curve.add(new THREE.LineCurve3(points[i - 1], points[i]));
       const geometry = new THREE.TubeGeometry(curve, Math.max(16, (points.length - 1) * 2), .022, 8, false);
       const color = sceneId === "twins" ? twinPathColor(group[0].label) : sceneId === "minkowski" && index === 1 ? 0xff8f9c : colors[sceneId];
       const materialColor = sceneId === "lorentz" ? [0x55b9ff, 0x76d8aa, 0xffd166, 0xff8f9c][index % 4]
@@ -412,7 +415,7 @@ async function mountScene() {
       camera: { type: "perspective", position: [4.5, 3.6, 5.2], target: [0, 0, 0], fov: 45 },
       controls: { enabled: Boolean(runtime.OrbitControls), enableDamping: true, dampingFactor: .07, minDistance: 2.5, maxDistance: 15 },
       callbacks: {
-        onError(error) { status.textContent = `Scene error: ${error.message}`; },
+        onError(error, details) { if (details?.operation !== "update") status.textContent = `Scene error: ${error.message}`; },
         onSelection(selection) {
           const index = currentRows.findIndex(row => row.id === selection.id);
           stopAnimation();
@@ -458,7 +461,7 @@ function updateRows() {
   updateModelReadout(rows);
   updateViewer(viewer, { sceneId: activeScene.id, rows, time, beta, observerFrame }, {
     isClosed: () => pageClosed,
-    report: error => { status.textContent = `Scene update failed: ${error.message}`; },
+    report: error => { stopAnimation(); status.textContent = `Scene update failed: ${error.message}`; },
     onSuccess: () => {
       if (status.textContent.startsWith("Scene update failed:")) status.textContent = globalThis.EINSTEIN_THREE_RUNTIME?.OrbitControls ? "3D scene ready · library operations connected." : "3D scene ready · camera orbit controls unavailable.";
     },

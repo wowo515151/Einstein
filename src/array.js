@@ -31,30 +31,34 @@ export function transpose(a) { return a[0].map((_,j)=>a.map(r=>r[j])); }
 export function mmul(a,b) { const bt=transpose(b); return a.map(r=>bt.map(c=>dot(r,c))); }
 export function mvec(a,v) { return a.map(r=>dot(r,v)); }
 export function determinant(a) {
+  const scaledFallback=()=>{const scales=a.map(row=>Math.max(...row.map(Math.abs)));if(scales.some(value=>value===0))return 0;const normalized=a.map((row,i)=>row.map(value=>value/scales[i])),unit=determinant(normalized);if(unit===0)return 0;return Math.sign(unit)*Math.exp(Math.log(Math.abs(unit))+scales.reduce((sum,value)=>sum+Math.log(value),0));};
   const m=a.map(r=>r.slice()); let d=1,sign=1,logMagnitude=0,extreme=false;
   for(let i=0;i<m.length;i++){let p=i;for(let r=i+1;r<m.length;r++)if(Math.abs(m[r][i])>Math.abs(m[p][i]))p=r;
     if(m[p][i]===0)return 0;if(p!==i){[m[p],m[i]]=[m[i],m[p]];d=-d;sign=-sign;}const q=m[i][i];d*=q;sign*=Math.sign(q);logMagnitude+=Math.log(Math.abs(q));if(!Number.isFinite(d)||d===0)extreme=true;
-    for(let r=i+1;r<m.length;r++){const f=m[r][i]/q;for(let c=i+1;c<m.length;c++)m[r][c]-=f*m[i][c];}}
+    for(let r=i+1;r<m.length;r++){const f=m[r][i]/q;for(let c=i+1;c<m.length;c++){m[r][c]-=f*m[i][c];if(!Number.isFinite(m[r][c]))return scaledFallback();}}}
   return extreme?sign*Math.exp(logMagnitude):d;
 }
 export function determinantRoot(a) {
+  const scaledFallback=()=>{const scales=a.map(row=>Math.max(...row.map(Math.abs)));if(scales.some(value=>value===0))throw new RangeError("metric is singular");const normalized=a.map((row,i)=>row.map(value=>value/scales[i])),unit=determinantRoot(normalized),root=Math.exp(Math.log(unit.root)+scales.reduce((sum,value)=>sum+Math.log(value),0)/2);if(!Number.isFinite(root)||root===0)throw new RangeError("metric volume scale is outside the finite range");return {sign:unit.sign,root};};
   const m=a.map(row=>row.slice());let sign=1,logMagnitude=0;
   for(let i=0;i<m.length;i++){
     let p=i;for(let r=i+1;r<m.length;r++)if(Math.abs(m[r][i])>Math.abs(m[p][i]))p=r;
     if(m[p][i]===0)throw new RangeError("metric is singular");
     if(p!==i){[m[p],m[i]]=[m[i],m[p]];sign=-sign;}
     const pivot=m[i][i];sign*=Math.sign(pivot);logMagnitude+=Math.log(Math.abs(pivot));
-    for(let r=i+1;r<m.length;r++){const factor=m[r][i]/pivot;for(let c=i+1;c<m.length;c++)m[r][c]-=factor*m[i][c];}
+    for(let r=i+1;r<m.length;r++){const factor=m[r][i]/pivot;for(let c=i+1;c<m.length;c++){m[r][c]-=factor*m[i][c];if(!Number.isFinite(m[r][c]))return scaledFallback();}}
   }
   const root=Math.exp(logMagnitude/2);
   if(!Number.isFinite(root)||root===0)throw new RangeError("metric volume scale is outside the finite range");
   return {sign,root};
 }
-export function inverse(a, tolerance=0) {
+export function inverse(a, tolerance=0) { return inverseCore(a,tolerance,true); }
+function inverseCore(a,tolerance,allowScaling) {
+  const retry=()=>{if(!allowScaling||tolerance!==0)throw new RangeError("matrix inversion has a non-finite intermediate");const scales=a.map(row=>Math.max(...row.map(Math.abs)));if(scales.some(value=>value===0))throw new RangeError("matrix is singular");const scaled=a.map((row,i)=>row.map(value=>value/scales[i])),result=inverseCore(scaled,0,false).map(row=>row.map((value,j)=>value/scales[j]));if(result.some(row=>row.some(value=>!Number.isFinite(value))))throw new RangeError("matrix inverse is non-finite");return result;};
   const n=a.length, m=a.map((r,i)=>[...r,...identity(n)[i]]);
   for(let i=0;i<n;i++){let p=i;for(let r=i+1;r<n;r++)if(Math.abs(m[r][i])>Math.abs(m[p][i]))p=r;
     if(Math.abs(m[p][i])<=tolerance)throw new RangeError("matrix is singular");[m[p],m[i]]=[m[i],m[p]];
-    const q=m[i][i];m[i]=m[i].map(x=>x/q);for(let r=0;r<n;r++)if(r!==i){const f=m[r][i];m[r]=m[r].map((x,c)=>x-f*m[i][c]);}}
+    const q=m[i][i];m[i]=m[i].map(x=>x/q);if(m[i].some(value=>!Number.isFinite(value)))return retry();for(let r=0;r<n;r++)if(r!==i){const f=m[r][i];m[r]=m[r].map((x,c)=>x-f*m[i][c]);if(m[r].some(value=>!Number.isFinite(value)))return retry();}}
   const result=m.map(r=>r.slice(n));
   if(result.some(row=>row.some(value=>!Number.isFinite(value))))throw new RangeError("matrix inverse is non-finite");
   return result;

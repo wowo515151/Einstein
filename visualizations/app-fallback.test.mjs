@@ -59,6 +59,9 @@ test("application fallback supports keyboard sample inspection and scene changes
     assert.match(byId("scene-readout").textContent,/Moving marker: s² = 0\.0000; coincident with the origin/);
     byId("time-slider").value="0.25";byId("time-slider").emit("input");
     assert.match(byId("scene-readout").textContent,/Moving marker: s² = -0\.6400; timelike/);
+    byId("time-slider").value="0.50000001";byId("time-slider").emit("input");
+    assert.match(byId("scene-readout").textContent,/Moving marker: s² = -1\.024e-15; timelike/);
+    byId("time-slider").value="0.25";byId("time-slider").emit("input");
     byId("observer-frame").value="moving";byId("observer-frame").emit("change");
     assert.match(byId("scene-readout").textContent,/Moving marker: s² = -0\.6400; timelike/);
     byId("observer-frame").value="lab";byId("observer-frame").emit("change");
@@ -81,7 +84,9 @@ test("application fallback supports keyboard sample inspection and scene changes
     byId("time-slider").value="0.25";byId("time-slider").emit("input");
     assert.match(byId("scene-readout").textContent,/past surface samples;.*surface null; r = 0 timelike, r = 2\|ct\| spacelike/);
     byId("time-slider").value="0.50000001";byId("time-slider").emit("input");
-    assert.match(byId("scene-readout").textContent,/ct = 5\.000e-8, surface null; r = 0 null, r = 2\|ct\| null/);
+    assert.match(byId("scene-readout").textContent,/ct = 5\.000e-8, surface null; r = 0 timelike, r = 2\|ct\| spacelike/);
+    byId("time-slider").value="0.49999999";byId("time-slider").emit("input");
+    assert.match(byId("scene-readout").textContent,/ct = -5\.000e-8, surface null; r = 0 timelike, r = 2\|ct\| spacelike/);
     byId("time-slider").value="0.5";byId("time-slider").emit("input");
     assert.match(byId("scene-readout").textContent,/apex is coincident.*r = 1 is spacelike/);
     buttons.find(button=>button.dataset.scene==="twins").emit("click");
@@ -221,6 +226,10 @@ test("application mounts local Three.js and OrbitControls with a simulated rende
     assert.equal(byId("renderer-fallback").hidden,true);
     assert.equal(byId("canvas-host").children.length,1);
     assert.ok(renderer.scene.getObjectByName("minkowski-selected-event-1"));
+    failNextGeometry=true;byId("speed-slider").value="0.9";byId("speed-slider").emit("input");
+    byId("speed-slider").value="0.6";byId("speed-slider").emit("input");
+    await new Promise(resolve=>setTimeout(resolve,0));
+    assert.match(byId("scene-status").textContent,/3D scene ready/);
     const canvas=renderer.domElement,original=renderer.camera.position.clone();
     canvas.emit("pointerdown",{pointerType:"mouse",pointerId:1,button:0,clientX:100,clientY:100});
     canvas.emit("pointermove",{pointerType:"mouse",pointerId:1,clientX:140,clientY:115});
@@ -239,8 +248,10 @@ test("application mounts local Three.js and OrbitControls with a simulated rende
     canvas.emit("pointerup",{pointerType:"mouse",pointerId:3,clientX:100,clientY:100});
     assert.equal(byId("play-button").getAttribute("aria-pressed"),"false");
     assert.match(byId("selection-readout").textContent,/Selected sample 1 of/);
+    byId("play-button").emit("click");assert.equal(byId("play-button").getAttribute("aria-pressed"),"true");
     pickIndex=100;failNextGeometry=true;byId("speed-slider").value="0.9";byId("speed-slider").emit("input");
     await new Promise(resolve=>setTimeout(resolve,0));assert.match(byId("scene-status").textContent,/Scene update failed/);
+    assert.equal(byId("play-button").getAttribute("aria-pressed"),"false");
     canvas.emit("pointerdown",{pointerType:"mouse",pointerId:4,button:0,clientX:100,clientY:100});
     canvas.emit("pointerup",{pointerType:"mouse",pointerId:4,clientX:100,clientY:100});
     assert.match(byId("selection-readout").textContent,/displayed point does not match the current sample data/);
@@ -282,6 +293,12 @@ test("application mounts local Three.js and OrbitControls with a simulated rende
       const points=renderer.scene.children.find(child=>child.isPoints);
       const expected=buildSceneData(model.id,{time:.5,beta:.6,observerFrame:"lab"});
       assert.equal(points.geometry.getAttribute("position").count,expected.length,model.id);
+      if(model.id==="twins"){
+        const curve=renderer.scene.getObjectByName("twins-trajectory-1").geometry.parameters.path;
+        const turn=curve.getPoint(.5),marker=renderer.scene.getObjectByName("traveler clock at selected time").position;
+        assert.ok(turn.distanceTo(marker)<1e-10);
+        for(let i=0;i<=500;i++)assert.ok(curve.getPoint(i/500).x<=1e-12);
+      }
       assert.ok(renderer.scene.children.length<1000,`${model.id} has bounded scene objects`);
       const objectCount=renderer.scene.children.length;
       byId("time-slider").emit("input");

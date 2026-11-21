@@ -8,8 +8,9 @@ const generatorHash = createHash("sha256").update(normalizeLineEndings(await rea
 const escape = text => text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 function inline(text) {
   text = text.replaceAll("\\|", "|");
-  const parts = text.split(/(`[^`]+`|\[[^\]]+\]\([^)]+\))/g);
+  const parts = text.split(/(`[^`]+`|\[[^\]]+\]\([^)]+\)|<br>)/g);
   return parts.map(part => {
+    if (part === "<br>") return "<br>";
     if (part.startsWith("`") && part.endsWith("`")) return `<code>${escape(part.slice(1, -1))}</code>`;
     const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
     if (link) {

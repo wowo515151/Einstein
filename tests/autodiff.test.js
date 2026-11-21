@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Dual4,Jet4,forwardJacobian4,forwardJacobian,forwardHessian4,forwardSecondOrder4,forwardSecondOrder,forwardJacobianTree,forwardSecondOrderTree,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward,ODEWorldline,integrateRK4ForwardTree,integrateRK4ForwardBounds} from "../src/relativity/index.js";
+import {Dual4,Jet4,forwardJacobian4,forwardJacobian,forwardHessian4,forwardSecondOrder4,forwardSecondOrder,forwardJacobianTree,forwardSecondOrderTree,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward,ODEWorldline,Event4,integrateRK4ForwardTree,integrateRK4ForwardBounds} from "../src/relativity/index.js";
 
 const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(3).divide(x[3].pow(2).add(1)));
 function expected([t,x,y,z]){const denominator=1+z*z;return [Math.cos(t)*Math.exp(x),Math.sin(t)*Math.exp(x),3*y*y/denominator,-2*z*y**3/denominator**2];}
@@ -115,6 +115,109 @@ test("forward divergence combines field and metric derivatives",()=>{
   op.connection.metricDerivative="bad";assert.throws(()=>op.gradientForward(p=>p[0],points[0]),/metricDerivative/);
 });
 
+test("forward divergence and wave operator handle constant metrics at large coordinates",()=>{
+  const base=2**53,point=[base,2,0,0],field=p=>[p[0].subtract(base).multiply(2),0,0,0],quadratic=p=>p[0].subtract(base).pow(2).add(p[1].pow(2));
+  for(const metric of [null,Metric4.minkowski(),[[-1,0,0,0],[0,2,0,0],[0,0,1,0],[0,0,0,1]]]){
+    const op=new DifferentialOperators4(metric);
+    assert.equal(op.divergenceForward(field,point),2);
+    assert.equal(op.dAlembertianForward(quadratic,point),metric===null||metric instanceof Metric4?0:-1);
+  }
+  const singular=new DifferentialOperators4([[0,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]);
+  assert.throws(()=>singular.divergenceForward(field,point),/singular/i);
+});
+
+test("forward gradient supports position-dependent metric families",()=>{
+  const metric=p=>[2,3].map(offset=>[[[-1,0,0,0],[0,p[1].add(offset),0,0],[0,0,1,0],[0,0,0,1]]]);
+  const points=[[[1,1,0,0],[2,2,0,0]]],ops=new DifferentialOperators4(metric,{metricDerivative:"forward"});
+  const result=ops.gradientForward(p=>p[0].add(p[1]),points);
+  for(let family=0;family<2;family++)for(let sample=0;sample<2;sample++){
+    assert.equal(result[family][sample][0],-1);
+    assert.ok(Math.abs(result[family][sample][1]-1/(2+family+points[0][sample][1]))<1e-14);
+  }
+  const form=[[0,1,0,0],[-1,0,0,0],[0,0,0,0],[0,0,0,0]],dual=ops.hodgeDual(form,points);
+  assert.ok(Math.abs(dual[0][0][2][3]-1/Math.sqrt(3))<1e-12);
+  assert.ok(Math.abs(dual[1][1][2][3]-1/Math.sqrt(5))<1e-12);
+});
+
+test("forward divergence and wave operator support curved metric families",()=>{
+  let calls=0;const metric=p=>{calls++;return [.2,.5].map(k=>[[[-1,0,0,0],[0,p[1].multiply(2*k).exp(),0,0],[0,0,1,0],[0,0,0,1]]]);};
+  const points=[[[0,1,0,0],[0,2,0,0]]],ops=new DifferentialOperators4(metric,{metricDerivative:"forward"});
+  const divergence=ops.divergenceForward(p=>[0,p[1],0,0],points);assert.equal(calls,2);
+  calls=0;const wave=ops.dAlembertianForward(p=>p[1].pow(2),points);assert.equal(calls,2);
+  for(let family=0;family<2;family++)for(let sample=0;sample<2;sample++){
+    const k=[.2,.5][family],x=points[0][sample][1];
+    assert.ok(Math.abs(divergence[family][sample]-(1+k*x))<1e-12);
+    assert.ok(Math.abs(wave[family][sample]-Math.exp(-2*k*x)*(2-2*k*x))<1e-12);
+  }
+});
+
+test("forward connection and acceleration broadcast curved metric families",()=>{
+  let calls=0;const metric=p=>{calls++;return [.2,.5].map(k=>[[[-1,0,0,0],[0,p[1].multiply(2*k).exp(),0,0],[0,0,1,0],[0,0,0,1]]]);};
+  const points=[[[0,1,0,0],[0,2,0,0]]],tangents=[[[1,2,0,0],[1,3,0,0]]],connection=new Connection4(metric,{metricDerivative:"forward"});
+  const gamma=connection.christoffel(points);assert.equal(calls,2);
+  calls=0;const direct=connection.christoffelForward(points);assert.deepEqual(direct,gamma);assert.equal(calls,2);
+  calls=0;const acceleration=connection.geodesicAcceleration(points,tangents);assert.equal(calls,2);
+  for(let family=0;family<2;family++)for(let sample=0;sample<2;sample++){
+    const k=[.2,.5][family],v=tangents[0][sample][1];
+    assert.ok(Math.abs(gamma[family][sample][1][1][1]-k)<1e-12);
+    assert.ok(Math.abs(acceleration[family][sample][1]+k*v*v)<1e-12);
+  }
+});
+
+test("forward parallel transport handles position-dependent metric families",()=>{
+  let calls=0;const metric=p=>{calls++;return [.2,.5].map(k=>[[[-1,0,0,0],[0,p[1].multiply(2*k).exp(),0,0],[0,0,1,0],[0,0,0,1]]]);};
+  const connection=new Connection4(metric,{metricDerivative:"forward"}),path=[[0,0,0,0],[0,1,0,0]];
+  const result=connection.parallelTransport([0,1,0,0],path,{stepsPerSegment:16});assert.equal(calls,128);
+  for(let family=0;family<2;family++)assert.ok(Math.abs(result[family][0].at(-1)[1]-Math.exp(-[.2,.5][family]))<1e-8);
+});
+
+test("forward covariant derivatives broadcast metric families with index variance",()=>{
+  let calls=0;const metric=p=>{calls++;return [.2,.5].map(k=>[[[-1,0,0,0],[0,p[1].multiply(2*k).exp(),0,0],[0,0,1,0],[0,0,0,1]]]);};
+  const points=[[[0,1,0,0],[0,2,0,0]]],connection=new Connection4(metric,{metricDerivative:"forward"}),field=p=>[0,p[1],0,0];
+  const scalar=connection.covariantDerivativeForward(p=>p[1].pow(2),points,[]);assert.equal(calls,2);
+  calls=0;const up=connection.covariantDerivativeVectorForward(field,points);assert.equal(calls,2);
+  calls=0;const down=connection.covariantDerivativeForward(field,points,["down"]);assert.equal(calls,2);
+  const mixed=connection.covariantDerivativeForward(p=>Array.from({length:4},(_,i)=>Array.from({length:4},(_,j)=>i===1&&j===1?p[1]:0)),points,["up","down"]);
+  for(let family=0;family<2;family++)for(let sample=0;sample<2;sample++){
+    const k=[.2,.5][family],x=points[0][sample][1];
+    assert.equal(scalar[family][sample][1],2*x);
+    assert.ok(Math.abs(up[family][sample][1][1]-(1+k*x))<1e-12);
+    assert.ok(Math.abs(down[family][sample][1][1]-(1-k*x))<1e-12);
+    assert.ok(Math.abs(mixed[family][sample][1][1][1]-1)<1e-12);
+  }
+});
+
+test("scalar metric callbacks retain pointwise limits and callback counts",()=>{
+  const points=Array.from({length:4097},()=>[0,0,0,0]);let calls=0;
+  const ops=new DifferentialOperators4(()=>{calls++;return [[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];},{metricDerivative:"forward"});
+  const gradient=ops.gradientForward(p=>p[0],points);
+  assert.equal(gradient.length,points.length);assert.deepEqual(gradient.at(-1),[-1,0,0,0]);assert.equal(calls,points.length);
+  calls=0;const divergence=ops.divergenceForward(p=>[p[0],0,0,0],points);
+  assert.equal(divergence.length,points.length);assert.equal(divergence.at(-1),1);assert.equal(calls,points.length);
+  calls=0;const connection=new Connection4(()=>{calls++;return [[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];},{metricDerivative:"forward"});
+  assert.equal(connection.christoffel(points.slice(0,1024)).length,1024);assert.equal(calls,1024);
+  calls=0;assert.throws(()=>connection.christoffel(points.slice(0,1025)),/component limit/);assert.equal(calls,0);
+  const accelerations=connection.geodesicAcceleration(points,[1,0,0,0]);
+  assert.equal(accelerations.length,points.length);assert.ok(accelerations.at(-1).every(value=>value===0));assert.equal(calls,points.length);
+  calls=0;const covariant=connection.covariantDerivativeForward(p=>p[0],points,[]);
+  assert.equal(covariant.length,points.length);assert.deepEqual(covariant.at(-1),[1,0,0,0]);assert.equal(calls,points.length);
+});
+
+test("forward differential operators broadcast constant metrics and points",()=>{
+  const diagonal=(a,b)=>[[-a,0,0,0],[0,b,0,0],[0,0,1,0],[0,0,0,1]];
+  const metrics=[[diagonal(1,2)],[diagonal(4,4)]],points=[[[1,2,0,0],[2,3,0,0]]];
+  const scalar=p=>p[0].pow(2).add(p[1].pow(2).multiply(3));
+  const field=p=>[p[0],p[1].multiply(2),p[2].multiply(3),p[3].multiply(4)];
+  const ops=new DifferentialOperators4(new Metric4(metrics));
+  const gradients=ops.gradientForward(scalar,points),divergences=ops.divergenceForward(field,points),waves=ops.dAlembertianForward(scalar,points);
+  for(let i=0;i<2;i++)for(let j=0;j<2;j++){
+    const [t,x]=points[0][j],a=i===0?1:4,b=i===0?2:4;
+    assert.deepEqual(gradients[i][j],[-2*t/a,6*x/b,0,0]);
+    assert.equal(divergences[i][j],10);assert.equal(waves[i][j],-2/a+6/b);
+  }
+  let calls=0;assert.throws(()=>ops.gradientForward(p=>{calls++;return p[0];},[[[0,0,0,0]],[[1,0,0,0]],[[2,0,0,0]]]),/broadcast/);assert.equal(calls,0);
+});
+
 
 test("second-order jets match analytic scalar Hessians",()=>{
   const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(2).multiply(x[3])),point=[.3,-.2,1.2,.4],result=forwardHessian4(field,point);
@@ -194,6 +297,41 @@ test("forward curvature agrees with finite differences for a non-diagonal metric
   assert.ok(forward.flat(3).some(v=>Math.abs(v)>.01));
   forward.flat(3).forEach((v,i)=>assert.ok(Math.abs(v-numeric.flat(3)[i])<1e-6));
   const c=new Curvature4(metric,{metricDerivative:"forward"});c.metricDerivative="bad";assert.throws(()=>c.riemann(point),/metricDerivative/);
+});
+
+test("forward curvature broadcasts callback metric families",()=>{
+  const diagonal=(k,p)=>[[p[1].pow(2).multiply(k).add(1).negate(),0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],
+    family=p=>[.2,.5].map(k=>[diagonal(k,p)]),points=[[[0,.1,0,0],[0,.3,0,0]]],curvature=new Curvature4(family,{metricDerivative:"forward"});
+  for(const name of ["riemann","ricci","ricciScalar","einsteinTensor","kretschmannScalar"]){
+    const actual=curvature[name](points);assert.equal(actual.length,2,`${name} includes the metric-family axis`);
+    for(let metricIndex=0;metricIndex<2;metricIndex++)for(let pointIndex=0;pointIndex<2;pointIndex++){
+      const k=metricIndex===0?.2:.5,expected=new Curvature4(p=>diagonal(k,p),{metricDerivative:"forward"})[name](points[0][pointIndex]);
+      assert.deepEqual(actual[metricIndex][pointIndex],expected,`${name} metric ${metricIndex}, point ${pointIndex}`);
+    }
+  }
+});
+
+test("forward connection derivatives broadcast callback metric families",()=>{
+  const diagonal=(k,p)=>[[-1,0,0,0],[0,p[0].multiply(k).exp(),0,0],[0,0,1,0],[0,0,0,1]],
+    family=p=>[.2,.5].map(k=>[diagonal(k,p)]),points=[[[0,.1,0,0],[0,.3,0,0]]],connection=new Connection4(family,{metricDerivative:"forward"}),actual=connection.christoffelDerivativeForward(points);
+  assert.equal(actual.length,2);assert.equal(actual[0].length,2);
+  for(let metricIndex=0;metricIndex<2;metricIndex++)for(let pointIndex=0;pointIndex<2;pointIndex++){
+    const k=metricIndex===0?.2:.5,expected=new Connection4(p=>diagonal(k,p),{metricDerivative:"forward"}).christoffelDerivativeForward(points[0][pointIndex]);
+    assert.deepEqual(actual[metricIndex][pointIndex],expected);
+  }
+  const changing=new Connection4(p=>p[1].value<.2?[diagonal(.2,p)]:[diagonal(.2,p),diagonal(.5,p)],{metricDerivative:"forward"});
+  assert.throws(()=>changing.christoffelDerivativeForward(points),/metric callback batch shape must remain constant/);
+  let probes=0;const oversized=new Connection4(p=>{probes++;return Array.from({length:193},()=>[diagonal(.2,p)]);},{metricDerivative:"forward"});
+  assert.throws(()=>oversized.christoffelDerivativeForward(points),/connection derivative family exceeds the bounded component/);assert.equal(probes,1);
+});
+
+test("forward Geodesic4 integration broadcasts callback metric families",()=>{
+  const metric=(k,p)=>[[-1,0,0,0],[0,p[1].multiply(2*k).exp(),0,0],[0,0,1,0],[0,0,0,1]],
+    family=p=>[.2,.5].map(k=>[metric(k,p)]),events=[[[0,0,0,0],[0,.2,0,0]]],tangents=[[[1,.5,0,0],[1,.4,0,0]]],geo=new Geodesic4(new Connection4(family,{metricDerivative:"forward"}),events,tangents),samples=geo.integrate([0,.4],{steps:8});
+  for(let metricIndex=0;metricIndex<2;metricIndex++)for(let pointIndex=0;pointIndex<2;pointIndex++){
+    const k=metricIndex===0?.2:.5,scalar=new Geodesic4(new Connection4(p=>metric(k,p),{metricDerivative:"forward"}),events[0][pointIndex],tangents[0][pointIndex]).integrate([0,.4],{steps:8});
+    for(let step=0;step<samples.length;step++)samples[step].event.position[metricIndex][pointIndex].forEach((value,axis)=>assert.ok(Math.abs(value-scalar[step].event.position[axis])<1e-12));
+  }
 });
 
 
@@ -335,6 +473,21 @@ test("ODE worldline exposes initial-event and parameter sensitivity histories",(
   const initial=[[[2,0,0,0],[3,0,0,0]]],batch=new ODEWorldline(initial,velocity).integrateForward([0,1],{...options,withRespectTo:"parameters"});
   for(let i=0;i<2;i++){const scalar=new ODEWorldline(initial[0][i],velocity).integrateForward([0,1],{...options,withRespectTo:"parameters"});assert.deepEqual(batch[1].at(-1)[0][i],scalar[1].at(-1));assert.deepEqual(batch[2].at(-1)[0][i],scalar[2].at(-1));}
   let calls=0;const many=Array.from({length:3000},()=>[1,0,0,0]);assert.throws(()=>new ODEWorldline(many,()=>{calls++;return [0,0,0,0];}).integrateForward([0,1]),/component or work limit/);assert.equal(calls,0);
+});
+
+test("ODE worldline honors replaced initial events in both integration paths",()=>{
+  let calls=0;const worldline=new ODEWorldline([0,0,0,0],()=>{calls++;return [1,0,0,0];});
+  for(const initial of [[2,3,0,0],new Event4([2,3,0,0])]){
+    worldline.initialEvent=initial;
+    assert.deepEqual(worldline.integrate([0,1],{steps:2})[1].at(-1),[3,3,0,0]);
+    const [,events,jacobians]=worldline.integrateForward([0,1],{steps:2});
+    assert.deepEqual(events.at(-1),[3,3,0,0]);
+    assert.deepEqual(jacobians.at(-1),[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]);
+  }
+  worldline.initialEvent=[1,2,3];calls=0;
+  assert.throws(()=>worldline.integrate([0,1],{steps:2}),/shape|4/);
+  assert.throws(()=>worldline.integrateForward([0,1],{steps:2}),/shape|4/);
+  assert.equal(calls,0);
 });
 
 

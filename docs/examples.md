@@ -122,6 +122,18 @@ console.log(electricTimes, magneticTimes); // approximately [0, 0.1, 0.2], [0.05
 console.log(residuals.ampere[0][0][0][0]); // [0, 0, 0]
 ```
 
+## Maxwell directional sensitivity
+
+At fixed solver controls, propagate a direction in the initial fields and static current. Here a uniform unit electric perturbation remains unchanged in vacuum. The time arrays in `direction` are sample times, not their derivatives.
+
+```js
+import { MaxwellEquations } from "../src/relativity/index.js";
+const grid = value => Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>value.slice())));
+const solver = new MaxwellEquations({c:1,epsilon0:1});
+const result = solver.evolveDirectional(grid([0,0,0]), grid([0,0,0]), grid([1,0,0]), grid([0,0,0]), {dt:0.1,steps:2});
+console.log(result.direction[1].at(-1)[0][0][0]); // [1, 0, 0]
+```
+
 ## CPU batch dot products
 
 The asynchronous batch interface can explicitly use the Float64 CPU reference path. See [GPU backends](gpu.md) for optional WebGPU and its precision limits.

@@ -49,6 +49,24 @@ test("spatial slice normalizes timelike directions across finite scales",()=>{
   assert.throws(()=>new SpatialSlice([0,0,0,0],[0,0,0,0]),/timelike/);
 });
 
+test("spatial slice basis generation is independent of containment tolerance",()=>{
+  for(const atol of [0,1,2]){
+    const slice=new SpatialSlice([0,0,0,0],[1,0,0,0],{atol});
+    assert.deepEqual(slice.embed3D([2,3,4]).position,[0,2,3,4]);
+    assert.deepEqual(slice.projectTo3D([0,2,3,4]),[2,3,4]);
+  }
+});
+
+test("automatically generated boosted slice bases tolerate roundoff at zero tolerance",()=>{
+  const origin=[0,0,0,0],normal=[1,.3,0,0],slice=new SpatialSlice(origin,normal,{atol:0});
+  const embedded=slice.embed3D([2,3,4]),projected=slice.projectTo3D(embedded);
+  projected.forEach((value,index)=>assert.ok(Math.abs(value-[2,3,4][index])<1e-12));
+  const explicit=slice.basis.map(axis=>axis.slice());
+  assert.throws(()=>new SpatialSlice(origin,normal,{atol:0,basis:explicit}),/orthonormal/);
+  slice.basis[0][1]+=.001;
+  assert.throws(()=>slice.embed3D([2,3,4]),/basis must remain/);
+});
+
 test("interval classification follows changes to its mutable displacement",()=>{
   const interval=new SpacetimeInterval([2,0,0,0],{c:1});
   assert.equal(interval.isTimelike(),true);
@@ -88,6 +106,24 @@ test("worldline collections and parameter spans mirror immutable tuple contents"
   assert.throws(()=>{segment.span[1]=0;},TypeError);assert.throws(()=>line.segments.push(segment),TypeError);
   assert.deepEqual(line.evaluate(.5).position,[.5,.5,0,0]);
   segment.span=[0,2];assert.deepEqual(segment.span,[0,2]);
+});
+test("WorldlineSegment exposes Lib4 field names as detached camelCase snapshots",()=>{
+  const segment=new WorldlineSegment([0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15],[2,4]);
+  assert.deepEqual(segment.startEvent,[0,1,2,3]);assert.deepEqual(segment.endEvent,[4,5,6,7]);
+  assert.deepEqual(segment.startFourVelocity,[8,9,10,11]);assert.deepEqual(segment.endFourVelocity,[12,13,14,15]);
+  assert.deepEqual(segment.parameterSpan,[2,4]);
+  segment.startEvent[0]=99;segment.startFourVelocity[0]=99;segment.parameterSpan[0]=99;
+  assert.deepEqual(segment.start.position,[0,1,2,3]);assert.deepEqual(segment.u0,[8,9,10,11]);assert.deepEqual(segment.span,[2,4]);
+});
+test("WorldlineSegment field assignments change interpolation and reject invalid replacements",()=>{
+  const frame={name:"frame"}, segment=new WorldlineSegment(new Event4([0,0,0,0],frame,2),new Event4([2,0,0,0],frame,2),[1,0,0,0],[1,0,0,0],[0,2]);
+  segment.startEvent=[1,0,0,0];segment.endEvent=[5,0,0,0];segment.startFourVelocity=[2,0,0,0];segment.endFourVelocity=[2,0,0,0];segment.parameterSpan=[1,3];
+  assert.deepEqual(segment.evaluate(2).position,[3,0,0,0]);assert.deepEqual(segment.tangent(2).components,[2,0,0,0]);
+  assert.equal(segment.evaluate(2).frame,frame);assert.equal(segment.evaluate(2).c,2);
+  assert.throws(()=>{segment.endEvent=new Event4([5,0,0,0],frame,3);},/share c and frame/);
+  assert.throws(()=>{segment.startFourVelocity=[1,2];},RangeError);
+  assert.throws(()=>{segment.parameterSpan=[3,1];},RangeError);
+  assert.deepEqual(segment.evaluate(2).position,[3,0,0,0]);
 });
 test("Lib4 frozen spacetime value objects reject reassignment",()=>{
   const cases=[
@@ -339,6 +375,8 @@ test("spatial slice validates future normal and scales containment tolerance",()
   assert.throws(()=>new SpatialSlice([0,0,0,0],[0,1,0,0]),/timelike/);
   const slice=new SpatialSlice([0,0,0,0],[1,0,0,0],{atol:1e-9});
   assert.equal(slice.contains([5e-4,1e6,0,0]),true);
+  assert.equal(slice.contains([5e-4,1e6,0,0],{atol:null}),true);
+  assert.equal(slice.contains([5e-4,1e6,0,0],{atol:0}),false);
   assert.throws(()=>slice.intersectWorldline([1,0,0,0],[0,1,0,0]),/parallel to or contained/);
   const hit=slice.intersectWorldline([1,2,0,0],[1,0,0,0]);
   assert.equal(hit.parameter,-1);assert.deepEqual(hit.event.position,[0,2,0,0]);
@@ -506,6 +544,9 @@ test("inertial frame applies its spatial rotation and relativistic boost",()=>{
   const other=new InertialFrame({relativeVelocity:[.2,0,0],c:1}),local=[0,1,2,0],expected=other.fromGlobal(frame.toGlobal(local).position).position;
   const relative=frame.relativeTransform(other).applyEvent({position:local}).position;
   assert.ok(relative.every((value,i)=>Math.abs(value-expected[i])<1e-12));
+  const explicitDefaults=new InertialFrame({origin:new Event4([[1,2,3,4],[5,6,7,8]]),orientation:null,relativeVelocity:null});
+  assert.deepEqual(explicitDefaults.relativeVelocity,[0,0,0]);
+  assert.deepEqual(explicitDefaults.toGlobal([1,0,0,0]).position,[[2,2,3,4],[6,6,7,8]]);
   assert.throws(()=>new InertialFrame({relativeVelocity:[299792458,0,0]}),RangeError);
   assert.throws(()=>new InertialFrame({orientation:[[1,0,0],[0,-1,0],[0,0,1]]}),RangeError);
 });

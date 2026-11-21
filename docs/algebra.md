@@ -4,6 +4,8 @@
 
 The exported `minkowskiDot(a,b)` helper computes the `(-,+,+,+)` product and broadcasts compatible leading dimensions for raw four-vector arrays. It accepts rectangular finite batches up to rank eight and caps the number of scalar results at one million.
 
+For algebra operations with an optional metric, omitting the metric or passing `null` selects the default Minkowski metric. This also applies to the optional metric in `new LeviCivita4(metric)`. Raw matrices are checked when wrapped as a metric; subsequent mutations of a `Metric4` require care as described below.
+
 ## `Vector4`
 
 Construct with four finite components `(ct,x,y,z)` or a rectangular batch ending in four components. The read-only `shape` property returns a frozen array of dimensions, including leading batch dimensions. `add`, `subtract`, `scale`, `dot`, `normSquared`, causal classification, normalization, `wedge`, `transform`, `lowerIndex`, and `outer` preserve compatible leading batch dimensions. A scalar or batched metric broadcasts with vector batches, and a single or batched transformation can be applied to vectors. `causalType()` returns Lib4-compatible numeric codes: `Vector4.CAUSAL_TIMELIKE` (`-1`), `Vector4.CAUSAL_NULL` (`0`), and `Vector4.CAUSAL_SPACELIKE` (`1`). Use `causalName()` when a readable label is needed. Both accept an optional metric and absolute squared-interval tolerance. The tolerance is unit- and scale-dependent, and near-null values can be sensitive to floating-point cancellation. Classification throws if finite input components overflow to a non-finite squared interval, rather than labeling the invalid result as null. Normalization rescales a vector when its squared norm overflows, becomes subnormal, or underflows to zero with zero tolerance; it rejects indeterminate scaled norms, including exact cancellation, and remains subject to floating-point conditioning. The default dot product uses `Metric4.minkowski()`. Lib4's PyTorch `device` and `dtype` properties have no JavaScript-array equivalent.
@@ -11,7 +13,8 @@ Construct with four finite components `(ct,x,y,z)` or a rectangular batch ending
 | Call | Returns |
 | --- | --- |
 | `new Vector4(components)` | A vector value; `components` ends in four coordinates. |
-| `v.add(other)`, `v.subtract(other)`, `v.scale(factor)` | A new `Vector4`; compatible leading batches broadcast. |
+| `v.add(other)`, `v.subtract(other)` | A new `Vector4`; compatible leading batches broadcast. |
+| `v.scale(factor)` | A new `Vector4`; factors broadcast over the complete component shape. |
 | `v.dot(other, metric)`, `v.normSquared(metric)` | A number or batch of numbers. The metric argument is optional. Both diagonal and general metrics use an exact Float64-input fallback for extreme intermediate products or non-finite results, as described for diagonal products in [array helpers](arrays.md); ordinary finite calculations remain subject to cancellation. |
 | `v.causalType(metric, atol)`, `v.causalName(metric, atol)` | Numeric causal codes or names, preserving batches. Both arguments are optional. |
 | `v.normalizeTimelike(metric, atol)`, `v.normalizeSpacelike(metric, atol)` | A new `Vector4`, or an error when the requested normalization is invalid. |
@@ -26,7 +29,7 @@ Construct with four finite components `(ct,x,y,z)` or a rectangular batch ending
 | Call | Returns |
 | --- | --- |
 | `new Covector4(components)` | A covector value ending in four components. |
-| `a.add(other)`, `a.scale(factor)`, `a.transform(matrix)` | A new `Covector4`; transformation uses the inverse transpose. |
+| `a.add(other)`, `a.scale(factor)`, `a.transform(matrix)` | A new `Covector4`; scale factors broadcast over the complete component shape, and transformation uses the inverse transpose. |
 | `a.pair(vector)`, `a.raiseIndex(metric)` | A number or batched numbers, or a raised `Vector4`. |
 | `new Metric4(components, {validate,atol})`, `Metric4.minkowski({batchShape})` | A metric value. Constructor and factory arguments are optional. |
 | `g.dot(a,b)`, `g.intervalSquared(a)`, `g.determinant()` | Numbers or batches of numbers. |
@@ -47,7 +50,7 @@ Symmetrization and antisymmetrization halve terms separately when their intermed
 | `new Matrix4(components)`, `Matrix4.identity({batchShape})` | A matrix value; the optional batch shape creates repeated identities. |
 | `m.add(other)`, `m.multiply(other)`, `m.transpose()`, `m.inverse()` | A new `Matrix4`. Matrix multiplication applies `other` first. |
 | `m.apply(vector)`, `m.determinant()` | A `Vector4`, or a number/batch of numbers. `apply` rejects `Covector4`. |
-| `new Tensor4(components,indexTypes)` | A tensor with explicit `up`/`down` slots; omit index types only when all dimensions are tensor axes. |
+| `new Tensor4(components,indexTypes)` | A tensor with explicit `up`/`down` slots. Omitted, `null`, or empty index types infer all-upper slots only when every dimension is a tensor axis of length four. |
 | `t.outer(other)`, `t.permuteIndices(order)` | A new `Tensor4` with combined or reordered index types. |
 | `t.lowerIndex(axis,metric)`, `t.raiseIndex(axis,metric)` | A new `Tensor4`; the metric defaults to Minkowski. |
 | `t.contract(axis1,axis2)` | A rank-reduced `Tensor4`, or scalar/batched numbers when no tensor slots remain. |
@@ -114,3 +117,5 @@ const vector = deserializeRelativity(text); // Vector4 with the same components
 ```
 
 This format does not serialize functions, object-valued frame metadata, callbacks, GPU resources, or the remaining value and solver types. It is independent of ordinary `JSON.stringify` on class instances.
+
+For `Vector4.scale` and `Covector4.scale`, factor arrays follow trailing-axis broadcasting across the full `(...,4)` component shape, as in Lib4. For example, `[2,3,4,5]` scales individual components; `[[2],[3]]` scales two vectors separately. Earlier local versions treated all factor axes as batch axes, so replace a two-vector factor `[2,3]` with `[[2],[3]]`. Output is limited to 1,000,000 components.
