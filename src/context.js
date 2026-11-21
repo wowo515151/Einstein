@@ -23,7 +23,7 @@ export class RelativityContext {
   createEMFieldTensor(electric,magnetic){return EMFieldTensor.fromEB(electric,magnetic,{c:this.c,epsilon0:this.epsilon0});}
   createFourCurrent(rho,current){return FourCurrent.fromChargeCurrent(rho,current,{c:this.c});}
   createMaxwellEquations(){return new MaxwellEquations({c:this.c,epsilon0:this.epsilon0});}
-  createRetardedField(worldline,velocity,charge,maxSpeed,options={}){return new RetardedField(worldline,velocity,charge,maxSpeed,{...options,c:this.c,epsilon0:this.epsilon0});}
+  createRetardedField(worldline,velocity,charge,maxSpeed,options={}){const config=options??{};if(Object.hasOwn(config,"c"))throw new TypeError("c is supplied by RelativityContext and cannot be overridden");if(Object.hasOwn(config,"epsilon0"))throw new TypeError("epsilon0 is supplied by RelativityContext and cannot be overridden");for(const key of Object.keys(config))if(!["maxIterations","tolerance"].includes(key))throw new TypeError(`unknown RetardedField option ${JSON.stringify(key)}`);return new RetardedField(worldline,velocity,charge,maxSpeed,{...config,c:this.c,epsilon0:this.epsilon0});}
   toDevice(device){return new RelativityContext({metric:this.metric,c:this.c,units:this.units,epsilon0:this.epsilon0,device});}
   setUnits(units,{c=null,epsilon0=null}={}){return new RelativityContext({metric:this.metric,c:c??(units==="natural"?1:C),units,epsilon0,device:this.device});}
 }

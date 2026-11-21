@@ -333,6 +333,10 @@ test("relativity context factories construct algebra and mechanics values with s
   const current=context.createFourCurrent(2,[1,2,3]);assert.equal(current.c,2);assert.deepEqual(current.components,[4,1,2,3]);
   const maxwell=context.createMaxwellEquations();assert.equal(maxwell.c,2);assert.equal(maxwell.epsilon0,3);
   const retarded=context.createRetardedField(()=>[0,0,0],()=>[0,0,0],1,.5);assert.equal(retarded.c,2);assert.equal(retarded.epsilon0,3);
+  const configuredRetarded=context.createRetardedField(()=>[0,0,0],()=>[0,0,0],1,.5,{maxIterations:32,tolerance:1e-8});assert.equal(configuredRetarded.maxIterations,32);assert.equal(configuredRetarded.tolerance,1e-8);
+  assert.throws(()=>context.createRetardedField(()=>[0,0,0],()=>[0,0,0],1,.5,{c:4}),/c is supplied by RelativityContext/);
+  assert.throws(()=>context.createRetardedField(()=>[0,0,0],()=>[0,0,0],1,.5,{epsilon0:5}),/epsilon0 is supplied by RelativityContext/);
+  assert.throws(()=>context.createRetardedField(()=>[0,0,0],()=>[0,0,0],1,.5,{tolerence:1e-6}),/unknown RetardedField option "tolerence"/);
 });
 test("relativity context propagates c through spacetime factories",()=>{
   const context=new RelativityContext({c:2});
