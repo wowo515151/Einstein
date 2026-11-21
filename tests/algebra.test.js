@@ -12,6 +12,21 @@ test("public entry point exposes validated products without internal primitives"
   assert.equal("metricDot4" in publicApi,false);
 });
 
+test("package entry point maps every Lib4 top-level export",()=>{
+  const lib4Exports=[
+    "Bivector4","Connection4","Covector4","Curvature4","DifferentialOperators4",
+    "EMFieldTensor","Event4","FourCurrent","FourMomentum","FourVelocity","Geodesic4",
+    "InertialFrame","LeviCivita4","LightCone","LorentzTransform","Matrix4",
+    "MaxwellEquations","Metric4","ODEWorldline","PoincareTransform","RelativityContext",
+    "RetardedField","SPEED_OF_LIGHT","SpacetimeInterval","SpatialSlice","Tensor4","Vector4",
+    "Worldline","WorldlineSegment","minkowskiDot"
+  ];
+  for(const name of lib4Exports){
+    assert.ok(Object.hasOwn(publicApi,name),`missing public API export ${name}`);
+    assert.equal(packageApi[name],publicApi[name],`package export ${name} differs from the source entry point`);
+  }
+});
+
 test("explicit null selects the default metric across the algebra family",()=>{
   const v=new Vector4([2,1,0,0]),w=new Vector4([3,0,1,0]);
   assert.equal(v.dot(w,null),-6);assert.equal(v.normSquared(null),-3);
