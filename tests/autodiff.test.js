@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Dual4,Jet4,forwardJacobian4,forwardJacobian,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward,ODEWorldline,integrateRK4ForwardTree,integrateRK4ForwardBounds} from "../src/relativity/index.js";
+import {Dual4,Jet4,forwardJacobian4,forwardJacobian,forwardHessian4,forwardSecondOrder4,forwardSecondOrder,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward,ODEWorldline,integrateRK4ForwardTree,integrateRK4ForwardBounds} from "../src/relativity/index.js";
 
 const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(3).divide(x[3].pow(2).add(1)));
 function expected([t,x,y,z]){const denominator=1+z*z;return [Math.cos(t)*Math.exp(x),Math.sin(t)*Math.exp(x),3*y*y/denominator,-2*z*y**3/denominator**2];}
@@ -384,4 +384,16 @@ test("forward Jacobian differentiates rectangular fields beyond four inputs",()=
   let calls=0;assert.throws(()=>forwardJacobian(()=>++calls,point),/consistent/);
   const cycle=[];cycle.push(cycle);assert.throws(()=>forwardJacobian(()=>cycle,[1]),/cycles/);
   assert.throws(()=>forwardJacobian(()=>Array(32769).fill(0),[1]),/component limit/);
+});
+
+
+test("general second-order fields capture cross-group Hessians",()=>{
+  const point=[2,.3,0,0,4,3],result=forwardSecondOrder(x=>[x[0].multiply(x[5]).add(x[1].sin()),x[4].pow(2)],point);
+  assert.ok(Math.abs(result.value[0]-(6+Math.sin(.3)))<1e-15);assert.deepEqual(result.jacobian[1],[0,0,0,0,8,0]);
+  assert.equal(result.hessian[0][0][5],1);assert.equal(result.hessian[0][5][0],1);assert.ok(Math.abs(result.hessian[0][1][1]+Math.sin(.3))<1e-15);assert.equal(result.hessian[1][4][4],2);
+  const scalar=forwardSecondOrder(x=>x[0].pow(2),[3]);assert.deepEqual(scalar,{value:9,jacobian:[6],hessian:[[2]]});
+  const field=x=>[x[0].multiply(x[3]),x[1].exp().multiply(x[2])],coordinates=[1,.2,3,4];assert.deepEqual(forwardSecondOrder(field,coordinates),forwardSecondOrder4(field,coordinates));
+  let calls=0;assert.throws(()=>forwardSecondOrder(()=>++calls,point),/consistent/);
+  const cycle=[];cycle.push(cycle);assert.throws(()=>forwardSecondOrder(()=>cycle,[1]),/cycles/);
+  assert.throws(()=>forwardSecondOrder(()=>Array(21846).fill(0),[1]),/component limit/);
 });

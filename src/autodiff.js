@@ -150,3 +150,35 @@ export function forwardSecondOrder4(field,point){
   }
   const result=unpack(output,0);return {value:result.value,jacobian:result.jacobian,hessian:result.hessian};
 }
+
+
+/** Differentiate bounded scalar or rectangular outputs through second order. */
+export function forwardSecondOrder(field,point){
+  if(typeof field!=="function")throw new TypeError("field must be a function");
+  if((!Array.isArray(point)&&!(ArrayBuffer.isView(point)&&!(point instanceof DataView)))||point.length<1||point.length>32)throw new RangeError("point must contain from 1 to 32 coordinates");
+  const input=Array.from(point,value=>finite(value,"point coordinate")),n=input.length,limit=Math.floor(65536/(1+n+n*n)),groups=Math.ceil(n/2);
+  let shape,values,jacobian,hessian;
+  for(let left=0;left<groups;left++)for(let right=left;right<groups;right++){
+    const variables=input.map((value,i)=>{const local=i-2*left,other=i-2*right;if(local>=0&&local<2)return Jet4.variable(value,local);if(right!==left&&other>=0&&other<2)return Jet4.variable(value,other+2);return Jet4.constant(value);});
+    const output=field(variables),active=new Set(),leaves=[];
+    function inspect(node,depth){
+      if(node instanceof Jet4||typeof node==="number"){if(leaves.length>=limit)throw new RangeError("forward second-order output exceeds the component limit");leaves.push(asJet(node));return [];}
+      if(!Array.isArray(node)||node.length===0)throw new TypeError("forward second-order output must be a nonempty rectangular array or scalar");
+      if(depth>=8)throw new RangeError("forward second-order output rank exceeds eight");
+      if(node.length>limit)throw new RangeError("forward second-order output exceeds the component limit");
+      if(active.has(node))throw new RangeError("forward second-order output cannot contain cycles");
+      active.add(node);try{const children=Array.from(node,child=>inspect(child,depth+1)),childShape=children[0];if(children.some(child=>JSON.stringify(child)!==JSON.stringify(childShape)))throw new RangeError("forward second-order output must be rectangular");return [node.length,...childShape];}finally{active.delete(node);}
+    }
+    const outputShape=inspect(output,0),sample=leaves.map(leaf=>leaf.value);
+    if(!shape){shape=outputShape;values=sample;jacobian=leaves.map(()=>Array(n).fill(0));hessian=leaves.map(()=>Array.from({length:n},()=>Array(n).fill(0)));}
+    else if(JSON.stringify(outputShape)!==JSON.stringify(shape)||sample.some((value,i)=>!Object.is(value,values[i])))throw new RangeError("forward second-order output must remain consistent across sensitivity evaluations");
+    const indices=[];for(let lane=0;lane<2&&2*left+lane<n;lane++)indices.push([2*left+lane,lane]);
+    if(right!==left)for(let lane=0;lane<2&&2*right+lane<n;lane++)indices.push([2*right+lane,lane+2]);
+    for(let row=0;row<leaves.length;row++){
+      for(const [axis,lane] of indices)jacobian[row][axis]=leaves[row].derivatives[lane];
+      for(const [axis,lane] of indices)for(const [otherAxis,otherLane] of indices)hessian[row][axis][otherAxis]=leaves[row].hessian[lane][otherLane];
+    }
+  }
+  const rebuild=leaves=>{let i=0;const visit=depth=>depth===shape.length?leaves[i++]:Array.from({length:shape[depth]},()=>visit(depth+1));return visit(0);};
+  return {value:rebuild(values),jacobian:rebuild(jacobian),hessian:rebuild(hessian)};
+}
