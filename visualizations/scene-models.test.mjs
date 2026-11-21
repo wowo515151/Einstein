@@ -15,6 +15,11 @@ test("stale viewer failures do not overwrite newer update status",async()=>{
   pending[2].reject(new Error("current"));await latest;assert.deepEqual(reports,["current"]);
   await updateViewer({update(){throw new Error("synchronous");}}, {}, {isClosed:()=>false,report:error=>reports.push(error.message)});
   assert.deepEqual(reports,["current","synchronous"]);
+  let recoveries=0;
+  const oldSuccess=updateViewer(viewer,{}, {isClosed:()=>false,report:error=>reports.push(error.message),onSuccess:()=>recoveries++});
+  const newFailure=updateViewer(viewer,{}, {isClosed:()=>false,report:error=>reports.push(error.message),onSuccess:()=>recoveries++});
+  pending[4].reject(new Error("new failure"));await newFailure;pending[3].resolve();await oldSuccess;
+  assert.equal(recoveries,0);assert.equal(reports.at(-1),"new failure");
 });
 test("curvature embedding approaches flat space at extreme finite distances",()=>{
   for(const beta of [0,.8])for(const [x,z] of [[1e200,0],[0,-1e200],[1e308,1e308]])

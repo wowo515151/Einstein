@@ -457,6 +457,9 @@ function updateRows() {
   updateViewer(viewer, { sceneId: activeScene.id, rows, time, beta, observerFrame }, {
     isClosed: () => pageClosed,
     report: error => { status.textContent = `Scene update failed: ${error.message}`; },
+    onSuccess: () => {
+      if (status.textContent.startsWith("Scene update failed:")) status.textContent = globalThis.EINSTEIN_THREE_RUNTIME?.OrbitControls ? "3D scene ready · library operations connected." : "3D scene ready · camera orbit controls unavailable.";
+    },
   });
 }
 

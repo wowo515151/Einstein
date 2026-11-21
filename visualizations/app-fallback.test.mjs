@@ -232,11 +232,13 @@ test("application mounts local Three.js and OrbitControls with a simulated rende
     assert.equal(byId("play-button").getAttribute("aria-pressed"),"false");
     assert.match(byId("selection-readout").textContent,/Selected sample 1 of/);
     pickIndex=100;failNextGeometry=true;byId("speed-slider").value="0.9";byId("speed-slider").emit("input");
+    await new Promise(resolve=>setTimeout(resolve,0));assert.match(byId("scene-status").textContent,/Scene update failed/);
     canvas.emit("pointerdown",{pointerType:"mouse",pointerId:4,button:0,clientX:100,clientY:100});
     canvas.emit("pointerup",{pointerType:"mouse",pointerId:4,clientX:100,clientY:100});
     assert.match(byId("selection-readout").textContent,/displayed point does not match the current sample data/);
     assert.match(byId("selection-readout").textContent,/\(-1\.200, -2\.000, 0\.000\)/);
     byId("speed-slider").value="0.6";byId("speed-slider").emit("input");pickIndex=0;
+    await new Promise(resolve=>setTimeout(resolve,0));assert.match(byId("scene-status").textContent,/3D scene ready/);
     pickIndex=100;renderer.rejectPointX=-1.8;byId("speed-slider").value="0.9";byId("speed-slider").emit("input");
     canvas.emit("pointerdown",{pointerType:"mouse",pointerId:5,button:0,clientX:100,clientY:100});
     canvas.emit("pointerup",{pointerType:"mouse",pointerId:5,clientX:100,clientY:100});
