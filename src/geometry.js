@@ -229,10 +229,11 @@ export class Curvature4 {
   _riemannScalar(p){
     if(this.metricDerivative==="forward")return this._riemannForwardScalar(p);
     if(this.metricDerivative!=="finite")throw new TypeError("metricDerivative must be finite or forward");
-    const g=this.connection.christoffel(p);
+    const christoffel=this.connection instanceof Connection4&&this.connection.metricDerivative==="forward"?point=>this.connection._christoffelScalar(point):point=>this.connection.christoffel(point);
+    const g=christoffel(p);
     const dg=Array.from({length:4},(_,d)=>{
       const stencil=differenceStencil(p,d,this.step);
-      const plus=this.connection.christoffel(stencil.plus),minus=this.connection.christoffel(stencil.minus);
+      const plus=christoffel(stencil.plus),minus=christoffel(stencil.minus);
       return plus.map((row,i)=>row.map((plane,j)=>plane.map((value,k)=>weightedStencilDerivative(value,minus[i][j][k],g[i][j][k],stencil))));
     });
     const R=zeros(4).map(()=>zeros(4).map(()=>zeros(4).map(()=>Array(4).fill(0))));

@@ -189,3 +189,15 @@ test("forward curvature agrees with finite differences for a non-diagonal metric
   forward.flat(3).forEach((v,i)=>assert.ok(Math.abs(v-numeric.flat(3)[i])<1e-6));
   const c=new Curvature4(metric,{metricDerivative:"forward"});c.metricDerivative="bad";assert.throws(()=>c.riemann(point),/metricDerivative/);
 });
+
+
+test("changing curvature derivative mode updates the complete calculation",()=>{
+  let dualCalls=0,jetCalls=0,numericCalls=0;
+  const metric=p=>{const t=p[0];if(t instanceof Dual4)dualCalls++;else if(t instanceof Jet4)jetCalls++;else numericCalls++;const a=typeof t==="number"?Math.exp(.2*t):t.multiply(.2).exp();return [[-1,0,0,0],[0,a,0,0],[0,0,a,0],[0,0,0,a]];};
+  const curvature=new Curvature4(metric,{metricDerivative:"forward",step:1e-4}),point=[.3,0,0,0];
+  const forward=curvature.riemann(point);assert.ok(jetCalls>0);
+  dualCalls=0;jetCalls=0;numericCalls=0;curvature.metricDerivative="finite";const finite=curvature.riemann(point);
+  assert.equal(dualCalls,0);assert.equal(jetCalls,0);assert.ok(numericCalls>0);
+  forward.flat(3).forEach((v,i)=>assert.ok(Math.abs(v-finite.flat(3)[i])<1e-6));
+  curvature.metricDerivative="forward";jetCalls=0;curvature.riemann(point);assert.ok(jetCalls>0);
+});
