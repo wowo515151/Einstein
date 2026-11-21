@@ -560,4 +560,7 @@ test("light-cone worldline intersections broadcast batched apexes and lines",()=
   assert.equal(result[0][0].length,2);assert.equal(result[0][1].length,1);assert.equal(result[1][1].length,0);
   const future=new LightCone(apexes,{branch:"future",atol:0});assert.deepEqual(future.intersectWorldline([0,1,0,0],[1,0,0,0]).map(hits=>hits.length),[1,1]);
   assert.throws(()=>cone.intersectWorldline([[0,0,0,0],[0,0,0,0],[0,0,0,0]],[1,0,0,0]),/broadcast/);
+  const tooMany=Array.from({length:125001},()=>[1,0,0,0]);
+  assert.throws(()=>new LightCone([0,0,0,0]).intersectWorldline([0,1,0,0],tooMany),/component limit/);
+  assert.throws(()=>new LightCone([0,0,0,0],{atol:0}).intersectWorldline([[0,1,0,0],[0,0,0,0]],[[1,0,0,0],[1,1,0,0]]),/not discrete/);
 });

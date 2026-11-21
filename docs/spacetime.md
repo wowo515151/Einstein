@@ -25,7 +25,7 @@
 | `new LightCone(apex,{branch,c,atol})` | A cone; the options object is optional and branch defaults to `both`. |
 | `cone.onSurface(event)`, `cone.contains(event)` | A Boolean or compatible batch of Booleans. |
 | `cone.sample(directions,spatialDistance)` | Four-coordinate arrays on the specified future or past branch. |
-| `cone.intersectWorldline(origin,direction)` | An array of zero, one, or two event-coordinate arrays for each affine worldline. Compatible apex, origin, and direction batches broadcast; each batch leaf contains its own possibly different number of hits. At most 125,000 batch samples are permitted. |
+| `cone.intersectWorldline(origin,direction)` | An array of zero, one, or two event-coordinate arrays for each affine worldline. Compatible apex, origin, and direction batches broadcast; each batch leaf contains its own possibly different number of hits. At most 125,000 batch samples are permitted. If any line lies entirely on the cone, the call throws because its intersections are not discrete. |
 | `cone.intersectHypersurface(normal,offset,directions)` | `{events,hitMask}` with compatible leading batches; the offset is measured from the apex. |
 | `new SpatialSlice(origin,normal,{basis,c,atol})` | A slice with a normalized future-directed timelike normal and optional spatial basis. |
 | `slice.projectTo3D(event)`, `slice.embed3D(coords)` | Spatial coordinate arrays, or an `Event4` from embedding. |
