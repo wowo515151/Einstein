@@ -76,6 +76,14 @@ test("event causal relations survive a proper boost and translation",()=>{
     assert.ok(Math.abs(origin.intervalTo(event).squared-transformedOrigin.intervalTo(event.transform(transform)).squared)<1e-12);
   }
 });
+test("worldline collections and parameter spans mirror immutable tuple contents",()=>{
+  const span=[0,1],segment=new WorldlineSegment([0,0,0,0],[1,1,0,0],[1,1,0,0],[1,1,0,0],span),segments=[segment],line=new Worldline(segments);
+  span[1]=5;segments.push(segment);
+  assert.deepEqual(segment.span,[0,1]);assert.equal(line.segments.length,1);
+  assert.throws(()=>{segment.span[1]=0;},TypeError);assert.throws(()=>line.segments.push(segment),TypeError);
+  assert.deepEqual(line.evaluate(.5).position,[.5,.5,0,0]);
+  segment.span=[0,2];assert.deepEqual(segment.span,[0,2]);
+});
 test("Lib4 frozen spacetime value objects reject reassignment",()=>{
   const cases=[
     [new Event4([0,0,0,0]),"c"],
