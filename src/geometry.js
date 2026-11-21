@@ -283,8 +283,29 @@ export class Curvature4 {
 export class Geodesic4 {
   constructor(connection,initialEvent,initialTangent){this.connection=connection;this.eventFrame=initialEvent instanceof Event4?initialEvent.frame:null;this.eventC=initialEvent instanceof Event4?initialEvent.c:undefined;this.initialEvent=initialEvent instanceof Event4?initialEvent.position:initialEvent;this.initialTangent=initialTangent;const event=parseGeometryBatch(this.initialEvent,"initial event",[4]),tangent=parseGeometryBatch(this.initialTangent,"initial tangent",[4]);if(JSON.stringify(event.shape)!==JSON.stringify(tangent.shape))throw new RangeError("initial_event and initial_tangent must have matching (...,4) shapes");this.initialEvent=event.data;this.initialTangent=tangent.data;}
   integrate(span,{steps=100,format="samples"}={}){if(!["samples","components"].includes(format))throw new TypeError("format must be 'samples' or 'components'");const parameterSpan=vector(span,2,"parameter span"),event=parseGeometryBatch(this.initialEvent,"initial event",[4]),tangent=parseGeometryBatch(this.initialTangent,"initial tangent",[4]),batchShape=event.shape.slice(0,-1),state=geometryBuildBatch(batchShape,index=>[...geometryBatchGet(event.data,batchShape,index,batchShape),...geometryBatchGet(tangent.data,batchShape,index,batchShape)]),rows=integrateRK4((parameter,current)=>geometryBuildBatch(batchShape,index=>{const sample=geometryBatchGet(current,batchShape,index,batchShape);return [...sample.slice(4),...this.connection.geodesicAcceleration(sample.slice(0,4),sample.slice(4))];}),state,parameterSpan[0],parameterSpan[1],steps),samples=rows.map(([parameter,current])=>({parameter,event:new Event4(geometryBuildBatch(batchShape,index=>geometryBatchGet(current,batchShape,index,batchShape).slice(0,4)),this.eventFrame,this.eventC),tangent:geometryBuildBatch(batchShape,index=>geometryBatchGet(current,batchShape,index,batchShape).slice(4))}));return format==="samples"?samples:[samples.map(sample=>sample.parameter),samples.map(sample=>sample.event.position),samples.map(sample=>sample.tangent)];}
-  solveBoundary(targetEvent,span,{steps=100,iterations=12,maxIterations=iterations,tolerance=1e-9,damping=1e-10,format="samples"}={}){
+  /** Endpoint and its derivative with respect to the initial tangent. */
+  endpointSensitivityForward(span,{steps=100}={}){
+    if(this.initialEvent.length!==4||this.initialTangent.length!==4||this.initialEvent.some(Array.isArray)||this.initialTangent.some(Array.isArray))throw new RangeError("endpoint sensitivity requires unbatched four-vectors");
+    if(!(this.connection instanceof Connection4))throw new TypeError("forward endpoint sensitivity requires a Connection4");
+    if(!Number.isInteger(steps)||steps<1||steps>2000)throw new RangeError("endpoint sensitivity steps must be an integer from 1 to 2000");
+    const interval=vector(span,2,"parameter span"),initial=[...this.initialEvent,...this.initialTangent,...Array(16).fill(0),...identity(4).flat()];
+    const rows=integrateRK4((_parameter,state)=>{
+      const position=state.slice(0,4),velocity=state.slice(4,8),S=Array.from({length:4},(_,i)=>state.slice(8+4*i,12+4*i)),T=Array.from({length:4},(_,i)=>state.slice(24+4*i,28+4*i));
+      const {gamma,derivative}=forwardConnectionDerivatives(this.connection.metric,position),acceleration=Array(4).fill(0),change=zeros(4);
+      for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++){
+        acceleration[a]-=gamma[a][b][c]*velocity[b]*velocity[c];
+        for(let j=0;j<4;j++){
+          change[a][j]-=gamma[a][b][c]*(T[b][j]*velocity[c]+velocity[b]*T[c][j]);
+          for(let d=0;d<4;d++)change[a][j]-=derivative[d][a][b][c]*S[d][j]*velocity[b]*velocity[c];
+        }
+      }
+      return [...velocity,...acceleration,...T.flat(),...change.flat()];
+    },initial,interval[0],interval[1],steps);
+    const last=rows.at(-1)[1];return {event:last.slice(0,4),tangent:last.slice(4,8),jacobian:Array.from({length:4},(_,i)=>last.slice(8+4*i,12+4*i))};
+  }
+  solveBoundary(targetEvent,span,{steps=100,iterations=12,maxIterations=iterations,tolerance=1e-9,damping=1e-10,format="samples",jacobianMethod="finite"}={}){
     if(!["samples","components"].includes(format))throw new TypeError("format must be 'samples' or 'components'");
+    if(!["finite","forward"].includes(jacobianMethod))throw new TypeError("jacobianMethod must be finite or forward");
     if(this.initialEvent.length!==4||this.initialTangent.length!==4||this.initialEvent.some(value=>Array.isArray(value))||this.initialTangent.some(value=>Array.isArray(value)))throw new RangeError("boundary shooting requires unbatched four-vectors");
     if(!Number.isInteger(steps)||steps<1||steps>2000)throw new RangeError("boundary solve steps must be an integer from 1 to 2000");
     if(!Number.isInteger(maxIterations)||maxIterations<0||maxIterations>12)throw new RangeError("boundary solve maxIterations must be an integer from 0 to 12");
@@ -298,13 +319,17 @@ export class Geodesic4 {
       const currentEndpoint=endpoint(tangent),residual=sub(currentEndpoint,target);
       if(Math.hypot(...residual)<=tolerance){const result=new Geodesic4(this.connection,new Event4(this.initialEvent,this.eventFrame,this.eventC),tangent).integrate(span,{steps,format});return format==="components"?[...result,tangent.slice()]:result;}
       if(iteration===maxIterations)break;
-      const h=1e-5;
-      const columns=Array.from({length:4},(_,column)=>{
-        const stencil=differenceStencil(tangent,column,h);
-        const plusEnd=endpoint(stencil.plus),minusEnd=endpoint(stencil.minus);
-        return plusEnd.map((value,row)=>weightedStencilDerivative(value,minusEnd[row],currentEndpoint[row],stencil));
-      });
-      const jacobian=transpose(columns);
+      let jacobian;
+      if(jacobianMethod==="forward")jacobian=new Geodesic4(this.connection,this.initialEvent,tangent).endpointSensitivityForward(span,{steps}).jacobian;
+      else{
+        const h=1e-5;
+        const columns=Array.from({length:4},(_,column)=>{
+          const stencil=differenceStencil(tangent,column,h);
+          const plusEnd=endpoint(stencil.plus),minusEnd=endpoint(stencil.minus);
+          return plusEnd.map((value,row)=>weightedStencilDerivative(value,minusEnd[row],currentEndpoint[row],stencil));
+        });
+        jacobian=transpose(columns);
+      }
       const jacobianTranspose=transpose(jacobian);
       const normal=mmul(jacobianTranspose,jacobian);
       for(let axis=0;axis<4;axis++)normal[axis][axis]+=damping;

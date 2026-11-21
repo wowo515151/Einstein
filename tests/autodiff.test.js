@@ -229,3 +229,25 @@ test("forward connection derivatives match analytic expanding metric",()=>{
   const batch=connection.christoffelDerivativeForward([point,point]);assert.deepEqual(batch,[derivative,derivative]);
   assert.throws(()=>connection.christoffelDerivativeForward(Array.from({length:257},()=>point)),/limit/);
 });
+
+
+test("forward geodesic endpoint sensitivities match a curved-coordinate solution",()=>{
+  const metric=p=>[[-1,0,0,0],[0,p[1].multiply(2).exp(),0,0],[0,0,1,0],[0,0,0,1]],connection=new Connection4(metric,{metricDerivative:"forward"}),geodesic=new Geodesic4(connection,[0,0,0,0],[1,.5,0,0]);
+  const result=geodesic.endpointSensitivityForward([0,1],{steps:64});
+  assert.ok(Math.abs(result.event[1]-Math.log(1.5))<1e-8);
+  const expected=[1,1/1.5,1,1];for(let i=0;i<4;i++)for(let j=0;j<4;j++)assert.ok(Math.abs(result.jacobian[i][j]-(i===j?expected[i]:0))<1e-7);
+  const shot=new Geodesic4(connection,[0,0,0,0],[1,.1,0,0]).solveBoundary([1,Math.log(1.5),0,0],[0,1],{steps:32,jacobianMethod:"forward",format:"components",tolerance:1e-7});
+  assert.ok(Math.abs(shot[3][1]-.5)<1e-6);assert.ok(Math.abs(shot[1].at(-1)[1]-Math.log(1.5))<1e-7);
+  assert.throws(()=>geodesic.solveBoundary([1,0,0,0],[0,1],{jacobianMethod:"bad"}),/jacobianMethod/);
+  assert.throws(()=>geodesic.endpointSensitivityForward([0,1],{steps:2001}),/steps/);
+});
+
+
+test("forward endpoint sensitivities agree with perturbations for a coupled metric",()=>{
+  const metric=p=>[[-1,p[2],0,0],[p[2],1,0,0],[0,0,1,0],[0,0,0,1]],connection=new Connection4(metric,{metricDerivative:"forward"}),initial=[0,.1,.3,0],velocity=[1,.2,.1,.05],steps=24,span=[0,.4],geodesic=new Geodesic4(connection,initial,velocity),jacobian=geodesic.endpointSensitivityForward(span,{steps}).jacobian,h=1e-5;
+  for(let column=0;column<4;column++){
+    const plus=velocity.slice(),minus=velocity.slice();plus[column]+=h;minus[column]-=h;
+    const end=v=>new Geodesic4(connection,initial,v).integrate(span,{steps}).at(-1).event.position,p=end(plus),m=end(minus);
+    for(let row=0;row<4;row++)assert.ok(Math.abs(jacobian[row][column]-(p[row]-m[row])/(2*h))<1e-8);
+  }
+});

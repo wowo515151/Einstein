@@ -63,7 +63,8 @@ This path supports bounded rectangular second derivatives, scalar wave operators
 | --- | --- |
 | `new Geodesic4(connection,initialEvent,initialTangent)` | An initial-value geodesic; event and tangent batches must match. |
 | `geodesic.integrate(span,{steps,format})` | Sample records by default, or `[parameters,events,tangents]` for `format:"components"`. |
-| `geodesic.solveBoundary(target,span,{steps,maxIterations,tolerance,damping,format})` | A shot trajectory to the target, or an error if it does not converge. Component format also returns the fitted initial tangent. |
+| `geodesic.endpointSensitivityForward(span,{steps})` | Endpoint, final tangent and the 4×4 derivative of endpoint position with respect to initial tangent, from variational equations and a jet-compatible `Connection4` metric. |
+| `geodesic.solveBoundary(target,span,{steps,maxIterations,tolerance,damping,format,jacobianMethod})` | A shot trajectory to the target, or an error if it does not converge. Set `jacobianMethod:"forward"` for variational endpoint sensitivities; component format also returns the fitted initial tangent. |
 
 See the runnable [flat-space geodesic example](examples.md#geodesic-initial-value-problem) before adapting it to a curved metric. Validate a chosen step size and integration resolution for the metric and path in use.
 
@@ -82,3 +83,5 @@ Gradient, divergence, exterior derivative and d’Alembertian reject non-finite 
 Riemann, Ricci, Einstein and Kretschmann calculations reject non-finite final components or contractions. At extreme scales, intermediate overflow can still prevent a representable final result; rescaling and convergence checks remain necessary.
 
 Finite-difference stencils use a weighted three-point derivative when floating-point rounding makes the two offsets unequal. This covers pointwise derivatives, connection and curvature derivatives, exterior derivatives, and the boundary solver's endpoint Jacobian. A pointwise Jacobian takes one additional center sample when needed and its work limit accounts for it; the other paths reuse their existing center value. Intermediate overflow can still prevent a representable derivative. This does not replace convergence checks or automatic differentiation.
+
+The opt-in forward endpoint sensitivity integrates geodesic and variational equations together with fixed-step RK4. It requires one unbatched geodesic, a `Connection4`, and a metric callback compatible with explicit `Jet4` operations; the boundary solver’s ordinary trajectory evaluations also require the callback to support its configured connection mode. The result is a numerical sensitivity of the discretized trajectory, not an adaptive error estimate. The solver retains the existing bounded shooting-work limit and defaults to finite-difference endpoint Jacobians.
