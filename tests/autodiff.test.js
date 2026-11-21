@@ -251,3 +251,10 @@ test("forward endpoint sensitivities agree with perturbations for a coupled metr
     for(let row=0;row<4;row++)assert.ok(Math.abs(jacobian[row][column]-(p[row]-m[row])/(2*h))<1e-8);
   }
 });
+
+
+test("forward boundary sensitivity works when tangent perturbations collapse",()=>{
+  const flat=()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],geodesic=new Geodesic4(new Connection4(flat),[0,0,0,0],[2**53,0,0,0]),span=[0,1e-15],options={steps:4,maxIterations:3,tolerance:1e-8,damping:1e-40,format:"components"};
+  assert.throws(()=>geodesic.solveBoundary([10,0,0,0],span,{...options,jacobianMethod:"finite"}),/distinct finite stencil points/);
+  const result=geodesic.solveBoundary([10,0,0,0],span,{...options,jacobianMethod:"forward"});assert.ok(Math.abs(result[1].at(-1)[0]-10)<1e-8);
+});
