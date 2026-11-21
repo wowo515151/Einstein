@@ -1,4 +1,5 @@
 import {weightedDot4} from "./weighted-dot-internal.js";
+import {forwardJacobian4} from "./autodiff.js";
 import {C, add, sub, scale, dot, norm, vector, matrix, mvec, mmul, transpose, inverse, minkowskiDot, identity, zeros, finiteNumber} from "./array.js";
 import {Vector4, Metric4, LorentzTransform, PoincareTransform} from "./algebra.js";
 
@@ -166,6 +167,19 @@ export function integrateRK4(rhs,initialState,start,end,steps){
   }
   return rows;
 }
+/** Integrate a dual-compatible four-state ODE and its initial-state Jacobian. */
+export function integrateRK4Forward4(rhs,initialState,start,end,steps){
+  if(typeof rhs!=="function")throw new TypeError("rhs must be a function");
+  const initial=vector(initialState,4,"initialState"),augmented=[...initial,...identity(4).flat()];
+  const rows=integrateRK4((time,state)=>{
+    const field=forwardJacobian4(point=>rhs(time,point),state.slice(0,4)),value=vector(field.value,4,"rhs result"),J=field.jacobian;
+    const sensitivity=Array.from({length:4},(_,i)=>state.slice(4+4*i,8+4*i)),change=zeros(4);
+    for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)change[i][j]+=J[i][k]*sensitivity[k][j];
+    return [...value,...change.flat()];
+  },augmented,start,end,steps);
+  return rows.map(([parameter,state])=>({parameter,value:state.slice(0,4),jacobian:Array.from({length:4},(_,i)=>state.slice(4+4*i,8+4*i))}));
+}
+
 export class ODEWorldline {
   constructor(initialEvent,fourVelocity){this.initialEvent=initialEvent instanceof Event4?initialEvent:new Event4(initialEvent);if(typeof fourVelocity!=="function")throw new TypeError("fourVelocity must be a function of (parameter, event)");this.fourVelocity=fourVelocity;}
   integrate(parameterSpan,{steps=100}={}){const span=vector(parameterSpan,2,"parameter span"),rows=integrateRK4(this.fourVelocity,this.initialEvent.position,span[0],span[1],steps);return [rows.map(([parameter])=>parameter),rows.map(([,event])=>event)];}

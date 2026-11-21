@@ -45,6 +45,7 @@
 | `segment.tangent(t)`, `worldline.tangent(t)` | A `Vector4` containing derivatives with respect to the parameter. |
 | `new ODEWorldline(initialEvent,fourVelocity).integrate(span,{steps})` | `[parameters,events]` coordinate histories; the callback receives `(parameter,eventCoordinates)`. |
 | `integrateRK4(rhs,initialState,start,end,steps)` | An array of `[parameter,state]` pairs using fixed-step RK4. |
+| `integrateRK4Forward4(rhs,initialState,start,end,steps)` | Fixed-step four-state history of `{parameter,value,jacobian}`; each 4×4 Jacobian differentiates the current state with respect to its initial state. |
 | `new InertialFrame({origin,orientation,relativeVelocity,c})` | A frame; the options object is optional and velocity uses the same units as `c`. |
 | `frame.toGlobalTransform`, `frame.fromGlobalTransform`, `frame.relativeTransform(other)` | `PoincareTransform` values; the first two are getters. |
 | `frame.toGlobal(position)`, `frame.fromGlobal(position)`, `frame.transformEvent(event)` | Objects containing transformed `position` arrays. |
@@ -61,3 +62,5 @@ Slice–cone intersections use a scaled branch tolerance and reject non-finite f
 Light-cone worldline intersections scale the quadratic coefficients before solving, allowing some large finite intersections that previously overflowed. With zero tolerance, tiny nonzero offsets and directions are scaled as well; with nonzero tolerance, extremely small direction scales can still underflow and are rejected. Events are constructed from the scaled roots without forming the affine parameter, which can recover representable events even when that parameter is outside the Float64 range. Near-degenerate roots and event construction remain subject to floating-point limits.
 
 `WorldlineSegment.span` and `Worldline.segments` use frozen copies of their input arrays, matching the immutable contents of the corresponding Lib4 tuples. The objects themselves remain mutable and their properties may be replaced; callers are responsible for preserving valid spans and joins after replacement.
+
+`integrateRK4Forward4` propagates a four-component state and its initial-state sensitivity together. Its callback receives numeric time and four `Dual4` inputs, and must return a four-component array of finite numeric constants or values built with explicit `Dual4` methods. Ordinary JavaScript arithmetic on dual values does not differentiate automatically. It uses the same RK4 time-grid and result bounds as `integrateRK4`, with 20 scalar state components per step. This fixed-step method is not general PyTorch autograd or adaptive error control.

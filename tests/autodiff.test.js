@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Dual4,Jet4,forwardJacobian4,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4} from "../src/relativity/index.js";
+import {Dual4,Jet4,forwardJacobian4,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4} from "../src/relativity/index.js";
 
 const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(3).divide(x[3].pow(2).add(1)));
 function expected([t,x,y,z]){const denominator=1+z*z;return [Math.cos(t)*Math.exp(x),Math.sin(t)*Math.exp(x),3*y*y/denominator,-2*z*y**3/denominator**2];}
@@ -291,4 +291,17 @@ test("forward geodesic sensitivities can differentiate the initial event",()=>{
   }
   const batched=new Geodesic4(connection,[initial,initial],[velocity,velocity]).endpointSensitivityForward(span,{steps,withRespectTo:"initialEvent"});assert.deepEqual(batched.jacobian,[result.jacobian,result.jacobian]);
   assert.throws(()=>geodesic.endpointSensitivityForward(span,{withRespectTo:"unknown"}),/withRespectTo/);
+});
+
+
+test("forward four-state RK4 propagates analytic oscillator sensitivities",()=>{
+  const rhs=(_t,x)=>[x[1],x[0].negate(),0,0],rows=integrateRK4Forward4(rhs,[1,0,2,3],0,Math.PI/2,64),last=rows.at(-1);
+  assert.ok(Math.abs(last.value[0])<1e-8);assert.ok(Math.abs(last.value[1]+1)<1e-8);assert.deepEqual(last.value.slice(2),[2,3]);
+  const expected=[[0,1,0,0],[-1,0,0,0],[0,0,1,0],[0,0,0,1]];
+  for(let i=0;i<4;i++)for(let j=0;j<4;j++)assert.ok(Math.abs(last.jacobian[i][j]-expected[i][j])<1e-8);
+  assert.equal(rows[0].parameter,0);assert.equal(last.parameter,Math.PI/2);
+  const nonautonomous=integrateRK4Forward4((t,x)=>[x[0].multiply(t),0,0,0],[2,0,0,0],0,1,64).at(-1);
+  assert.ok(Math.abs(nonautonomous.value[0]-2*Math.exp(.5))<1e-8);assert.ok(Math.abs(nonautonomous.jacobian[0][0]-Math.exp(.5))<1e-8);
+  assert.throws(()=>integrateRK4Forward4(()=>[1,2],[0,0,0,0],0,1,4),/rhs result/);
+  assert.throws(()=>integrateRK4Forward4((_t,x)=>[Math.sin(x[0]),0,0,0],[0,0,0,0],0,1,4),/implicitly converted/);
 });
