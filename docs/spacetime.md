@@ -46,6 +46,7 @@
 | `new ODEWorldline(initialEvent,fourVelocity).integrate(span,{steps})` | `[parameters,events]` coordinate histories; the callback receives `(parameter,eventCoordinates)`. |
 | `integrateRK4(rhs,initialState,start,end,steps)` | An array of `[parameter,state]` pairs using fixed-step RK4. |
 | `integrateRK4Forward4(rhs,initialState,start,end,steps)` | Fixed-step four-state history of `{parameter,value,jacobian}`; each 4×4 Jacobian differentiates the current state with respect to its initial state. |
+| `integrateRK4Forward(rhs,initialState,start,end,steps)` | The same explicit forward sensitivity for a vector of 1–32 components, subject to aggregate work and history bounds. |
 | `new InertialFrame({origin,orientation,relativeVelocity,c})` | A frame; the options object is optional and velocity uses the same units as `c`. |
 | `frame.toGlobalTransform`, `frame.fromGlobalTransform`, `frame.relativeTransform(other)` | `PoincareTransform` values; the first two are getters. |
 | `frame.toGlobal(position)`, `frame.fromGlobal(position)`, `frame.transformEvent(event)` | Objects containing transformed `position` arrays. |
@@ -64,3 +65,5 @@ Light-cone worldline intersections scale the quadratic coefficients before solvi
 `WorldlineSegment.span` and `Worldline.segments` use frozen copies of their input arrays, matching the immutable contents of the corresponding Lib4 tuples. The objects themselves remain mutable and their properties may be replaced; callers are responsible for preserving valid spans and joins after replacement.
 
 `integrateRK4Forward4` propagates a four-component state and its initial-state sensitivity together. Its callback receives numeric time and four `Dual4` inputs, and must return a four-component array of finite numeric constants or values built with explicit `Dual4` methods. Ordinary JavaScript arithmetic on dual values does not differentiate automatically. It uses the same RK4 time-grid and result bounds as `integrateRK4`, with 20 scalar state components per step. This fixed-step method is not general PyTorch autograd or adaptive error control.
+
+`integrateRK4Forward` generalizes the four-state interface to 1–32 components by evaluating the dual-compatible callback in groups of four sensitivity directions. The callback must return consistent values across those evaluations and should be deterministic and free of side effects. Fixed-step work is limited by `4 × steps × stateLength³ ≤ 20,000,000`, in addition to the ordinary history limit. The returned square Jacobian differentiates the current state with respect to its initial state; parameter or external-variable derivatives are not included.

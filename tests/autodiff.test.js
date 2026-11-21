@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Dual4,Jet4,forwardJacobian4,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4} from "../src/relativity/index.js";
+import {Dual4,Jet4,forwardJacobian4,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward} from "../src/relativity/index.js";
 
 const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(3).divide(x[3].pow(2).add(1)));
 function expected([t,x,y,z]){const denominator=1+z*z;return [Math.cos(t)*Math.exp(x),Math.sin(t)*Math.exp(x),3*y*y/denominator,-2*z*y**3/denominator**2];}
@@ -304,4 +304,14 @@ test("forward four-state RK4 propagates analytic oscillator sensitivities",()=>{
   assert.ok(Math.abs(nonautonomous.value[0]-2*Math.exp(.5))<1e-8);assert.ok(Math.abs(nonautonomous.jacobian[0][0]-Math.exp(.5))<1e-8);
   assert.throws(()=>integrateRK4Forward4(()=>[1,2],[0,0,0,0],0,1,4),/rhs result/);
   assert.throws(()=>integrateRK4Forward4((_t,x)=>[Math.sin(x[0]),0,0,0],[0,0,0,0],0,1,4),/implicitly converted/);
+});
+
+
+test("bounded forward RK4 handles coupled sensitivity directions beyond four states",()=>{
+  const rhs=(_t,x)=>[x[4],0,0,0,x[0].negate(),0],rows=integrateRK4Forward(rhs,[1,2,3,4,0,6],0,Math.PI/2,64),last=rows.at(-1);
+  assert.ok(Math.abs(last.value[0])<1e-8);assert.ok(Math.abs(last.value[4]+1)<1e-8);assert.ok(Math.abs(last.jacobian[0][4]-1)<1e-8);assert.ok(Math.abs(last.jacobian[4][0]+1)<1e-8);assert.equal(last.jacobian[5][5],1);
+  assert.throws(()=>integrateRK4Forward(rhs,Array(33).fill(0),0,1,2),/1 to 32/);
+  assert.throws(()=>integrateRK4Forward(rhs,Array(32).fill(0),0,1,1000),/work limit/);
+  assert.throws(()=>integrateRK4Forward(()=>[1,2],[0],0,1,2),/shape/);
+  let count=0;assert.throws(()=>integrateRK4Forward((_t,x)=>{count++;return x.map(()=>count);},Array(5).fill(0),0,1,2),/consistent/);
 });

@@ -1,5 +1,5 @@
 import {weightedDot4} from "./weighted-dot-internal.js";
-import {forwardJacobian4} from "./autodiff.js";
+import {Dual4,forwardJacobian4} from "./autodiff.js";
 import {C, add, sub, scale, dot, norm, vector, matrix, mvec, mmul, transpose, inverse, minkowskiDot, identity, zeros, finiteNumber} from "./array.js";
 import {Vector4, Metric4, LorentzTransform, PoincareTransform} from "./algebra.js";
 
@@ -167,6 +167,31 @@ export function integrateRK4(rhs,initialState,start,end,steps){
   }
   return rows;
 }
+/** Integrate a bounded dual-compatible vector ODE and its initial-state Jacobian. */
+export function integrateRK4Forward(rhs,initialState,start,end,steps){
+  if(typeof rhs!=="function")throw new TypeError("rhs must be a function");
+  if((!Array.isArray(initialState)&&!(ArrayBuffer.isView(initialState)&&!(initialState instanceof DataView)))||initialState.length<1||initialState.length>32)throw new RangeError("initialState must contain from 1 to 32 components");
+  if(!Number.isInteger(steps)||steps<1||steps>MAX_INTEGRATION_STEPS)throw new RangeError(`steps must be an integer from 1 to ${MAX_INTEGRATION_STEPS}`);
+  const n=initialState.length,initial=vector(initialState,n,"initialState");
+  if(4*steps*n*n*n>20_000_000)throw new RangeError("forward ODE exceeds the bounded work limit");
+  const augmented=[...initial,...identity(n).flat()];
+  const rows=integrateRK4((time,state)=>{
+    const values=state.slice(0,n),jacobian=Array.from({length:n},()=>Array(n).fill(0));let fieldValues;
+    for(let first=0;first<n;first+=4){
+      const input=values.map((value,i)=>i>=first&&i<first+4?Dual4.variable(value,i-first):Dual4.constant(value)),output=rhs(time,input);
+      if(!Array.isArray(output)||output.length!==n)throw new RangeError("rhs result shape must match the integration state");
+      const duals=Array.from(output,value=>value instanceof Dual4?value:Dual4.constant(value)),sample=duals.map(value=>value.value);
+      if(fieldValues&&sample.some((value,i)=>!Object.is(value,fieldValues[i])))throw new RangeError("rhs values must remain consistent across sensitivity evaluations");
+      fieldValues=sample;
+      for(let row=0;row<n;row++)for(let lane=0;lane<4&&first+lane<n;lane++)jacobian[row][first+lane]=duals[row].derivatives[lane];
+    }
+    const change=Array.from({length:n},()=>Array(n).fill(0));
+    for(let i=0;i<n;i++)for(let j=0;j<n;j++)for(let k=0;k<n;k++)change[i][j]+=jacobian[i][k]*state[n+k*n+j];
+    return [...fieldValues,...change.flat()];
+  },augmented,start,end,steps);
+  return rows.map(([parameter,state])=>({parameter,value:state.slice(0,n),jacobian:Array.from({length:n},(_,i)=>state.slice(n+i*n,n+(i+1)*n))}));
+}
+
 /** Integrate a dual-compatible four-state ODE and its initial-state Jacobian. */
 export function integrateRK4Forward4(rhs,initialState,start,end,steps){
   if(typeof rhs!=="function")throw new TypeError("rhs must be a function");
