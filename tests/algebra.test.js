@@ -273,6 +273,17 @@ test("bivector contraction and Hodge dual use custom Lorentz metrics",()=>{
   const twice=field.dual(metric).dual(metric).components;
   for(let i=0;i<4;i++)for(let j=0;j<4;j++)assert.ok(Math.abs(twice[i][j]+field.components[i][j])<1e-12);
 });
+test("metric and tensor batch metadata cannot be overwritten",()=>{
+  const metric=Metric4.minkowski({batchShape:[2]}),tensor=new Tensor4([[1,0,0,0],[0,1,0,0]],["up"]);
+  for(const value of [metric,tensor]){assert.equal(Reflect.set(value,"batchShape",[9]),false);assert.equal(Reflect.set(value,"batchRank",0),false);assert.deepEqual(value.batchShape,[2]);}
+  tensor.indexTypes=["invalid"];assert.throws(()=>tensor.transform(Matrix4.identity()),/indexTypes/);
+});
+test("tensor operations reject reshaped mutable component batches",()=>{
+  const matrix=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],tensor=new Tensor4([matrix,matrix],["up","down"]),vector=new Tensor4([1,0,0,0],["up"]);
+  tensor.components.push(matrix);
+  for(const operation of [()=>tensor.permuteIndices([1,0]),()=>tensor.outer(vector),()=>vector.outer(tensor),()=>tensor.lowerIndex(0),()=>tensor.contract(0,1),()=>tensor.symmetrize(),()=>tensor.antisymmetrize(),()=>tensor.transform(Matrix4.identity())])
+    assert.throws(operation,/tensor batch shape cannot change/);
+});
 test("metric operations reject changed mutable batch dimensions consistently",()=>{
   const metric=Metric4.minkowski({batchShape:[2]}),vector=new Vector4([1,0,0,0]),field=new Bivector4([[0,1,0,0],[-1,0,0,0],[0,0,0,0],[0,0,0,0]]);
   metric.components.push(Metric4.minkowski().components);

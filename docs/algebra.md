@@ -96,3 +96,7 @@ For raw rank-two input, `applyTensor` uses the Lorentz inverse convention `ηL�
 `Matrix4` derives batch dimensions from its current component arrays for each operation. If callers reshape mutable components, they must remain rectangular with trailing 4×4 dimensions and within the documented bounds.
 
 `Metric4` retains its constructed batch shape: reshaping its mutable component arrays is rejected by metric-aware algebra operations. Construct a new metric for a different batch shape.
+
+`Tensor4` retains its constructed batch shape. If mutable component arrays are reshaped, its operations reject the changed shape; construct a new tensor for different dimensions.
+
+`Metric4` and `Tensor4` expose read-only cached batch shape and rank metadata. `Tensor4.indexTypes` may be reassigned, but operations validate its entries and compatibility with the components.
