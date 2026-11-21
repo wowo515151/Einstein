@@ -201,3 +201,14 @@ test("changing curvature derivative mode updates the complete calculation",()=>{
   forward.flat(3).forEach((v,i)=>assert.ok(Math.abs(v-finite.flat(3)[i])<1e-6));
   curvature.metricDerivative="forward";jetCalls=0;curvature.riemann(point);assert.ok(jetCalls>0);
 });
+
+
+test("forward Schwarzschild curvature is vacuum with analytic Kretschmann invariant",()=>{
+  const mass=.5,metric=p=>{const r=p[1],theta=p[2],f=Jet4.constant(1).subtract(Jet4.constant(2*mass).divide(r)),r2=r.pow(2);return [[f.negate(),0,0,0],[0,Jet4.constant(1).divide(f),0,0],[0,0,r2,0],[0,0,0,r2.multiply(theta.sin().pow(2))]];};
+  const curvature=new Curvature4(metric,{metricDerivative:"forward"});
+  for(const point of [[0,3,Math.PI/2,0],[0,4,.8,.2]]){
+    const ricci=curvature.ricci(point);for(const component of ricci.flat())assert.ok(Math.abs(component)<1e-12);
+    assert.ok(Math.abs(curvature.ricciScalar(point))<1e-12);
+    assert.ok(Math.abs(curvature.kretschmannScalar(point)-48*mass*mass/point[1]**6)<1e-12);
+  }
+});
