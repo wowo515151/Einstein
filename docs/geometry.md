@@ -50,3 +50,7 @@ Finite-difference quotients use scaled subtraction if the difference between fin
 When the initial geodesic event is an `Event4`, sample events retain its frame and `c`, including after boundary shooting. Component-format histories contain coordinate arrays without event metadata.
 
 Metric callbacks used by geometry operations must return one 4×4 metric for each point. A returned `Metric4` is checked against its constructed batch shape before use; construct a new metric if its batch shape needs to change.
+
+Gradient, divergence, exterior derivative and d’Alembertian reject non-finite final results. Extreme-scale cancellation can still lose a representable result; rescale coordinates and compare converged calculations.
+
+Riemann, Ricci, Einstein and Kretschmann calculations reject non-finite final components or contractions. At extreme scales, intermediate overflow can still prevent a representable final result; rescaling and convergence checks remain necessary.

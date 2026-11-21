@@ -3,6 +3,26 @@ import assert from "node:assert/strict";
 import {Connection4,Curvature4,DifferentialOperators4,Geodesic4,Metric4,Event4} from "../src/relativity/index.js";
 const flat=()=>new Metric4().components;
 
+test("curvature calculations reject non-finite products and contractions",()=>{
+  const point=[0,0,0,0],flat=()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],tensor4=()=>Array.from({length:4},()=>Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0))));
+  const curvature=new Curvature4(flat),gamma=Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0)));
+  gamma[0][1][1]=1e200;gamma[1][0][0]=1e200;curvature.connection={christoffel:()=>gamma};
+  assert.throws(()=>curvature.riemann(point),/Riemann curvature is non-finite/);
+  const r=tensor4();r[0][1][0][1]=1e308;r[2][1][2][1]=1e308;curvature._riemannScalar=()=>r;
+  assert.throws(()=>curvature.ricci(point),/Ricci tensor is non-finite/);
+  curvature._ricciTensorScalar=()=>[[0,0,0,0],[0,1e308,0,0],[0,0,1e308,0],[0,0,0,0]];
+  assert.throws(()=>curvature.ricciScalar(point),/Ricci scalar is non-finite/);
+  assert.throws(()=>curvature.einsteinTensor(point),/Einstein tensor curvature scalar is non-finite/);
+  const squared=tensor4();squared[1][0][1][0]=1e200;curvature._riemannScalar=()=>squared;
+  assert.throws(()=>curvature.kretschmannScalar(point),/Kretschmann scalar is non-finite/);
+});
+test("differential operators reject non-finite combined results",()=>{
+  const point=[0,0,0,0],flat=new DifferentialOperators4(),metric=new Metric4([[-1e-308,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]),scaled=new DifferentialOperators4(metric);
+  assert.throws(()=>scaled.gradient(x=>10*x[0],point),/gradient is non-finite/);
+  assert.throws(()=>flat.divergence(x=>x.map(value=>1e308*value),point),/divergence is non-finite/);
+  assert.throws(()=>flat.exteriorDerivative(x=>[1e308*x[1],-1e308*x[0],0,0],point),/exterior derivative is non-finite/);
+  assert.throws(()=>scaled.dAlembertian(x=>x[0]*x[0],point),/dAlembertian is non-finite/);
+});
 test("geometry rejects reshaped Metric4 components before use",()=>{
   const metric=Metric4.minkowski(),components=metric.components;
   metric.components=[components,components];
