@@ -2,6 +2,7 @@
 import {Vector4,Covector4,Matrix4,Metric4,Tensor4,Bivector4,LeviCivita4,LorentzTransform,PoincareTransform} from "./algebra.js";
 import {FourVelocity,FourMomentum,FourCurrent,EMFieldTensor,MaxwellEquations} from "./mechanics.js";
 import {Event4,SpacetimeInterval,LightCone,SpatialSlice,InertialFrame,WorldlineSegment,Worldline} from "./spacetime.js";
+import {RelativityContext} from "./context.js";
 
 function eventFromData(data){
   if(!data||typeof data!=="object"||Array.isArray(data)||Object.keys(data).length!==3||!["position","frame","c"].every(key=>Object.hasOwn(data,key)))throw new TypeError("invalid serialized event fields");
@@ -17,6 +18,16 @@ function segmentFromData(data){
 function worldlineFromData(data){
   if(!Array.isArray(data.segments)||data.segments.length<1||data.segments.length>65536)throw new RangeError("serialized worldline must have 1 to 65536 segments");
   return new Worldline(data.segments.map(segmentFromData));
+}
+
+function contextFromData(data){
+  if(typeof data.device!=="string")throw new TypeError("context device label must be a string for serialization");
+  if(typeof data.epsilon0!=="number"||!Number.isFinite(data.epsilon0)||data.epsilon0<=0)throw new RangeError("context epsilon0 must be positive and finite");
+  return new RelativityContext({metric:new Metric4(data.metricComponents),c:data.c,units:data.units,epsilon0:data.epsilon0,device:data.device});
+}
+function contextData(value){
+  if(!(value.metric instanceof Metric4))throw new TypeError("context metric must be a Metric4");
+  return {metricComponents:value.metric.components,c:value.c,units:value.units,epsilon0:value.epsilon0,device:value.device};
 }
 
 const formats = [
@@ -36,6 +47,7 @@ const formats = [
   ["WorldlineSegment",WorldlineSegment,["start","end","u0","u1","span"],segmentFromData],
   ["Worldline",Worldline,["segments"],worldlineFromData],
   ["InertialFrame",InertialFrame,["origin","orientation","relativeVelocity","c"], data=>new InertialFrame({origin:eventFromData(data.origin),orientation:data.orientation,relativeVelocity:data.relativeVelocity,c:data.c})],
+  ["RelativityContext",RelativityContext,["metricComponents","c","units","epsilon0","device"],contextFromData,contextData],
   ["MaxwellEquations",MaxwellEquations,["c","epsilon0"], data=>new MaxwellEquations({c:data.c,epsilon0:data.epsilon0})],
   ["FourVelocity",FourVelocity,["components","c"], data=>new FourVelocity(data.components,{c:data.c})],
   ["FourMomentum",FourMomentum,["components","c"], data=>new FourMomentum(data.components,{c:data.c})],
