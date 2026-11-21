@@ -405,14 +405,14 @@ test("boundary shooting uses representable tangent perturbations",()=>{
   const collapsed=new Geodesic4(connection,[0,0,0,0],[1e20,0,0,0]);
   assert.throws(()=>collapsed.solveBoundary([1e20+1e6,0,0,0],[0,1],{steps:1,maxIterations:1}),/distinct finite stencil points/);
 });
-test("geodesic boundary shooting converges on a curved metric from a perturbed tangent",()=>{
-  const metric=x=>[[-1,0,0,0],[0,Math.exp(2*x[0]),0,0],[0,0,1,0],[0,0,0,1]];
-  const connection=new Connection4(metric,{step:1e-4}),initial=[0,0,0,0],span=[0,.5];
-  const targetPath=new Geodesic4(connection,initial,[1,.5,0,0]).integrate(span,{steps:32});
-  const target=targetPath.at(-1).event.position;
-  const result=new Geodesic4(connection,initial,[.8,.7,0,0]).solveBoundary(target,span,{steps:32,maxIterations:8,tolerance:1e-6,damping:1e-8});
-  assert.ok(Math.hypot(...result.at(-1).event.position.map((value,i)=>value-target[i]))<1e-6);
-  assert.ok(Math.hypot(...result[0].tangent.map((value,i)=>value-[1,.5,0,0][i]))<1e-5);
+test("geodesic boundary shooting reaches an analytic curved-metric endpoint under step refinement",()=>{
+  const metric=x=>[[-1,0,0,0],[0,Math.exp(2*x[1]),0,0],[0,0,1,0],[0,0,0,1]];
+  const connection=new Connection4(metric,{step:1e-4}),initial=[0,0,0,0],span=[0,.5],target=[.5,Math.log(1.25),0,0];
+  for(const steps of [8,16,32]){
+    const result=new Geodesic4(connection,initial,[.8,.7,0,0]).solveBoundary(target,span,{steps,maxIterations:8,tolerance:1e-7,damping:1e-8});
+    assert.ok(Math.hypot(...result.at(-1).event.position.map((value,i)=>value-target[i]))<1e-7);
+    assert.ok(Math.hypot(...result[0].tangent.map((value,i)=>value-[1,.5,0,0][i]))<1e-6);
+  }
 });
 test("curved-coordinate geodesic agrees with its analytic path under step refinement",()=>{
   const metric=x=>[[-1,0,0,0],[0,Math.exp(2*x[1]),0,0],[0,0,1,0],[0,0,0,1]];
