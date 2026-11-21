@@ -120,3 +120,14 @@ import { samplePlaneWaveBatch } from "../src/relativity/index.js";
 const fields = await samplePlaneWaveBatch([0, 0, 0, 0, 0, 0, 0, Math.PI / 2], { waveNumber: 1, backend: "cpu" });
 console.log(fields[0]); // electric [1,0,0], magnetic [0,1,0]
 ```
+
+## Plane-wave spatial grid
+
+Generate a small rectangular grid at `ct = 0` and sample it with the CPU reference backend. The z coordinate varies fastest; see [GPU backends](gpu.md) for limits and optional WebGPU sampling.
+
+```js
+import { samplePlaneWaveGrid } from "../src/relativity/index.js";
+const grid = await samplePlaneWaveGrid({ shape: [1, 1, 2], spacing: [1, 1, Math.PI / 2], backend: "cpu" });
+console.log(Array.from(grid.events)); // [0,0,0,0, 0,0,0,π/2]
+console.log(grid.fields.map(field => field.electric[0])); // approximately [1, 0]
+```

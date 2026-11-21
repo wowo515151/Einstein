@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {minkowskiDotBatch,samplePlaneWaveBatch,WebGPUBackend} from "../src/relativity/index.js";
+import {minkowskiDotBatch,samplePlaneWaveBatch,samplePlaneWaveGrid,WebGPUBackend} from "../src/relativity/index.js";
 
 test("CPU batch dot product handles multiple events",async()=>{
   assert.deepEqual(await minkowskiDotBatch([1,2,0,0,2,1,0,0],[1,2,0,0,2,1,0,0],{backend:"cpu"}),[3,-3]);
@@ -91,6 +91,16 @@ test("plane-wave sampling provides CPU fields and validates inputs",async()=>{
   await assert.rejects(()=>samplePlaneWaveBatch([1e308,0,0,-1e308],{backend:"cpu"}),/phase/);
   assert.deepEqual(await samplePlaneWaveBatch([],{backend:"cpu"}),[]);
 });
+test("plane-wave grid samples ordered spatial coordinates and preflights bounds",async()=>{
+  const grid=await samplePlaneWaveGrid({shape:[2,1,2],origin:[1,2,3],spacing:[.5,1,.25],ct:.5,waveNumber:2,backend:"cpu"});
+  assert.deepEqual(grid.shape,[2,1,2]);
+  assert.deepEqual(Array.from(grid.events),[.5,1,2,3,.5,1,2,3.25,.5,1.5,2,3,.5,1.5,2,3.25]);
+  for(let i=0;i<grid.fields.length;i++)assert.ok(Math.abs(grid.fields[i].electric[0]-Math.cos(2*(grid.events[4*i+3]-.5)))<1e-15);
+  let called=false;const gpu={samplePlaneWaveBatch(){called=true;throw new Error("unexpected dispatch");}};
+  for(const options of [{shape:[0,1,1]},{shape:[65537,4,1]},{shape:[2,1,1],origin:[1e20,0,0]},{shape:[4,1,1],origin:[2**53-2,0,0]},{shape:[1,1,1],spacing:[1,0,1]},{shape:[1,1,1],backend:"invalid"}])
+    await assert.rejects(()=>samplePlaneWaveGrid({...options,gpu}),/shape|limit|coordinates|spacing|backend/);
+  assert.equal(called,false);
+});
 
 test("plane-wave GPU dispatch uses the wave pipeline and matches the CPU reference",async()=>{
   const {device}=mockDevice();let selected,bindings,dispatches=0;
@@ -110,6 +120,10 @@ test("plane-wave GPU dispatch uses the wave pipeline and matches the CPU referen
     const backend=new WebGPUBackend(),actual=await samplePlaneWaveBatch(events,{...options,backend:"webgpu",gpu:backend}),expected=await samplePlaneWaveBatch(events,{...options,backend:"cpu"});
     assert.equal(dispatches,1);assert.equal(backend.status,"ready");assert.equal(backend.lastExecution,"webgpu");
     for(let i=0;i<actual.length;i++)assert.ok(Math.abs(actual[i].electric[0]-expected[i].electric[0])<1e-6);
+    const grid=await samplePlaneWaveGrid({shape:[2,1,2],origin:[0,0,.5],spacing:[1,1,.25],ct:.25,...options,backend:"webgpu",gpu:backend});
+    const reference=await samplePlaneWaveGrid({shape:[2,1,2],origin:[0,0,.5],spacing:[1,1,.25],ct:.25,...options,backend:"cpu"});
+    assert.equal(dispatches,2);assert.equal(backend.lastExecution,"webgpu");
+    grid.fields.forEach((field,i)=>assert.ok(Math.abs(field.electric[0]-reference.fields[i].electric[0])<1e-6));
     backend.dispose();assert.equal(device.destroyed,1);
   });
 });

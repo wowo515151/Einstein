@@ -65,3 +65,5 @@ See [Differential geometry](geometry.md) for metric callbacks, finite-difference
 `minkowskiDotBatch` offers an asynchronous CPU or optional WebGPU path for flat batches of four-vectors. `WebGPUBackend` exposes `supported`, `initialize`, `minkowskiDotBatch`, and `dispose` for explicit backend reuse. See [GPU and CPU backends](gpu.md) for fallback behavior, precision, and ownership.
 
 `samplePlaneWaveBatch` samples normalized electric and magnetic plane-wave fields at flat batches of four-coordinate events, using the CPU or the optional WebGPU backend. Its wave model, supported GPU envelope, return values, and fallback behavior are described in [GPU and CPU backends](gpu.md).
+
+`samplePlaneWaveGrid` builds a bounded rectangular spatial grid and samples the same model at one coordinate time, returning flat events and fields with z varying fastest. See [GPU and CPU backends](gpu.md) for its options and limits.

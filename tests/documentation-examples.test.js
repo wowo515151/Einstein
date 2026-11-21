@@ -12,6 +12,7 @@ test("documented JavaScript examples execute against the local library",async()=
     "Euclidean and Minkowski products":"[dot(components,components),minkowskiDot(components,components)]",
     "Geodesic initial-value problem":"samples.at(-1).event.position",
     "Maxwell evolution and residuals":"{electricTimes,magneticTimes,ampere:residuals.ampere[0][0][0][0]}",
+    "Plane-wave spatial grid":"{events:Array.from(grid.events),amplitudes:grid.fields.map(field=>field.electric[0])}",
   };
   for(const {title,code} of examples){
     const expression=checks[title],probe=expression?`\nconsole.log('__EXAMPLE_RESULT__'+JSON.stringify(${expression}));`:"";
@@ -23,6 +24,10 @@ test("documented JavaScript examples execute against the local library",async()=
     const actual=JSON.parse(line.slice("__EXAMPLE_RESULT__".length));
     if(title==="Euclidean and Minkowski products")assert.deepEqual(actual,[5,-3]);
     else if(title==="Geodesic initial-value problem")actual.forEach((value,i)=>assert.ok(Math.abs(value-[1,.5,0,0][i])<1e-12));
+    else if(title==="Plane-wave spatial grid"){
+      assert.deepEqual(actual.events,[0,0,0,0,0,0,0,Math.PI/2]);
+      assert.ok(Math.abs(actual.amplitudes[0]-1)<1e-15&&Math.abs(actual.amplitudes[1])<1e-15);
+    }
     else {
       assert.deepEqual(actual.ampere,[0,0,0]);
       actual.electricTimes.forEach((value,i)=>assert.ok(Math.abs(value-[0,.1,.2][i])<1e-12));

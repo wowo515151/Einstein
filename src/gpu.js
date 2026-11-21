@@ -207,3 +207,27 @@ function validateEvents(events,waveNumber){if(!Array.isArray(events)&&!ArrayBuff
 function fieldsFromAmplitudes(amplitudes){return amplitudes.map(amplitude=>({electric:[amplitude,0,0],magnetic:[0,amplitude,0]}));}
 function cpuPlaneWave(events,waveNumber){const amplitudes=[];for(let i=0;i<events.length;i+=4){const phase=waveNumber*(events[i+3]-events[i]);if(!Number.isFinite(phase))throw new RangeError("plane-wave phase is non-finite");amplitudes.push(Math.cos(phase));}return fieldsFromAmplitudes(amplitudes);}
 export async function samplePlaneWaveBatch(events,{waveNumber=1,backend="auto",gpu=null}={}){validateEvents(events,waveNumber);if(backend==="cpu")return cpuPlaneWave(events,waveNumber);if(backend!=="auto"&&backend!=="webgpu")throw new TypeError("backend must be auto, cpu, or webgpu");const instance=gpu??new WebGPUBackend();try{return await instance.samplePlaneWaveBatch(events,waveNumber);}finally{if(gpu==null)instance.dispose();}}
+
+/** Sample a bounded rectangular spatial grid at one coordinate time. */
+export async function samplePlaneWaveGrid({shape,origin=[0,0,0],spacing=[1,1,1],ct=0,waveNumber=1,backend="auto",gpu=null}={}){
+  const triple=(value,name)=>{if((!Array.isArray(value)&&!ArrayBuffer.isView(value))||value.length!==3)throw new TypeError(`${name} must have three components`);return Array.from(value);};
+  const dimensions=triple(shape,"shape"),start=triple(origin,"origin"),steps=triple(spacing,"spacing");
+  if(dimensions.some(n=>!Number.isSafeInteger(n)||n<1))throw new RangeError("grid shape must contain positive safe integers");
+  const count=dimensions.reduce((product,n)=>product*n,1);
+  if(!Number.isSafeInteger(count)||count>MAX_BATCH_VECTORS)throw new RangeError(`grid exceeds the ${MAX_BATCH_VECTORS}-point limit`);
+  if(start.some(value=>!Number.isFinite(value))||steps.some(value=>!Number.isFinite(value)||value<=0)||!Number.isFinite(ct))throw new RangeError("grid coordinates and time must be finite and spacing positive");
+  if(!Number.isFinite(waveNumber)||waveNumber<=0)throw new RangeError("waveNumber must be positive and finite");
+  if(!["auto","cpu","webgpu"].includes(backend))throw new TypeError("backend must be auto, cpu, or webgpu");
+  for(let axis=0;axis<3;axis++){
+    const last=start[axis]+(dimensions[axis]-1)*steps[axis];
+    if(!Number.isFinite(last))throw new RangeError("grid coordinates cannot be represented");
+    let previous=start[axis];
+    for(let i=1;i<dimensions[axis];i++){const next=start[axis]+i*steps[axis];if(!Number.isFinite(next)||next<=previous)throw new RangeError("grid coordinates cannot be represented distinctly");previous=next;}
+  }
+  const events=new Float64Array(count*4);let offset=0;
+  for(let x=0;x<dimensions[0];x++)for(let y=0;y<dimensions[1];y++)for(let z=0;z<dimensions[2];z++){
+    events[offset++]=ct;events[offset++]=start[0]+x*steps[0];events[offset++]=start[1]+y*steps[1];events[offset++]=start[2]+z*steps[2];
+  }
+  const fields=await samplePlaneWaveBatch(events,{waveNumber,backend,gpu});
+  return {shape:dimensions,events,fields};
+}
