@@ -16,7 +16,8 @@ Each callback accepts a single four-coordinate array. The position argument `x` 
 | `ops.divergence(vectorField,x)`, `ops.divergenceForward(vectorField,x)` | The covariant divergence as a number or batch; the forward variant differentiates a dual-compatible field and uses the configured metric derivative method. |
 | `ops.exteriorDerivative(form,x)`, `ops.exteriorDerivativeForward(form,x)` | Components of the exterior derivative of a covariant form; the latter uses an explicitly dual-compatible callback. |
 | `ops.hodgeDual(twoForm,x)` | Covariant dual two-form components; `x` is required for a position-dependent metric. |
-| `ops.dAlembertian(scalarField,x)` | The scalar covariant wave operator, as a number or batch. |
+| `ops.hessianForward(scalarField,x)` | Coordinate Hessian from an explicit second-order field callback, as a matrix or batch. |
+| `ops.dAlembertian(scalarField,x)`, `ops.dAlembertianForward(scalarField,x)` | The scalar covariant wave operator; the forward variant uses explicit second-order field derivatives and the configured metric connection. |
 
 ### Explicit forward differentiation
 
@@ -30,7 +31,13 @@ const gradient = ops.gradientForward(field, [2, 0, 0, 0]);
 // Minkowski raised gradient: [-4, 1, 0, 0]
 ```
 
-`partialForward`, `jacobianForward`, `gradientForward`, `divergenceForward`, and `exteriorDerivativeForward` also accept supported coordinate batches. This is an opt-in first-order API, not a general PyTorch replacement: it does not differentiate ordinary JavaScript callbacks automatically, provide higher derivatives, or automatically differentiate curvature or wave-operator calculations. `Connection4.christoffelForward` separately accepts a dual-compatible metric callback for first-order metric derivatives. Constructing a connection with `{metricDerivative:"forward"}` uses that path in its ordinary Christoffel, acceleration, covariant-derivative, parallel-transport, and geodesic workflows. `covariantDerivativeForward` and `covariantDerivativeVectorForward` explicitly differentiate a dual-compatible field; combine them with forward metric derivatives to avoid finite stencils for both parts. Ordinary covariant derivatives and subsequent curvature calculations are not automatically differentiated. Accessing `.value` explicitly or branching on it can discard derivative information; use such operations only when mathematically appropriate.
+`partialForward`, `jacobianForward`, `gradientForward`, `divergenceForward`, and `exteriorDerivativeForward` also accept supported coordinate batches. This opt-in first-order API does not differentiate ordinary JavaScript callbacks automatically or provide general PyTorch autograd. `Connection4.christoffelForward` separately accepts a dual-compatible metric callback for first-order metric derivatives. Constructing a connection with `{metricDerivative:"forward"}` uses that path in its ordinary Christoffel, acceleration, covariant-derivative, parallel-transport, and geodesic workflows. `covariantDerivativeForward` and `covariantDerivativeVectorForward` explicitly differentiate a dual-compatible field; combine them with forward metric derivatives to avoid finite stencils for both parts. Ordinary covariant derivatives and subsequent curvature calculations are not automatically differentiated. Accessing `.value` explicitly or branching on it can discard derivative information; use such operations only when mathematically appropriate.
+
+### Explicit second-order scalar differentiation
+
+`forwardHessian4(field,point)` evaluates an explicitly written scalar field with `Jet4` inputs and returns `{value,gradient,hessian}`. `Jet4` uses the same arithmetic and elementary-method names as `Dual4`, while propagating a 4×4 Hessian. `hessianForward` and `dAlembertianForward` accept supported coordinate batches; the latter combines the field Hessian with the configured metric connection. With `metricDerivative:"forward"` and a dual-compatible metric, both field derivatives and first metric derivatives avoid finite stencils. The square root requires a positive value, and powers at zero reject when their second derivative is unsupported. Numeric conversion, non-finite values and unsupported outputs reject. Intermediate overflow or underflow can still affect a representable result.
+
+This path covers scalar second derivatives and the scalar wave operator, not higher orders, general tensor Hessians, curvature differentiation, or PyTorch autograd.
 
 ## Connection and curvature
 

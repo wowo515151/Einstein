@@ -1,7 +1,7 @@
 import {C,vector,matrix,zeros,identity,transpose,mmul,mvec,inverse,determinantRoot,dot,scale,add,sub,minkowskiDot} from "./array.js";
 import {Metric4,LorentzTransform} from "./algebra.js";
 import {Event4,integrateRK4} from "./spacetime.js";
-import {forwardJacobian4} from "./autodiff.js";
+import {forwardJacobian4,forwardHessian4} from "./autodiff.js";
 
 function geometryMetric(value){return matrix(value instanceof Metric4?value._checkedComponents().data:value);}
 function differenceStencil(point,axis,step){const plus=point.slice(),minus=point.slice();plus[axis]+=step;minus[axis]-=step;const span=plus[axis]-minus[axis],forward=plus[axis]-point[axis],backward=point[axis]-minus[axis];if(!Number.isFinite(span)||!(forward>0)||!(backward>0))throw new RangeError("finite-difference step must produce distinct finite stencil points");return {plus,minus,span,forward,backward};}
@@ -111,6 +111,12 @@ export class DifferentialOperators4 {
     if(out.some(row=>row.some(value=>!Number.isFinite(value))))throw new RangeError("Hodge dual components are non-finite");
     return out;
   }
+  hessianForward(fn,x){return this._mapPoints(x,p=>forwardHessian4(fn,p).hessian,64);}
+  dAlembertianForward(fn,x){return this._mapPoints(x,p=>{
+    const field=forwardHessian4(fn,p),g=inverse(this._g(p)),gamma=this.connection.christoffel(p);let result=0;
+    for(let mu=0;mu<4;mu++)for(let nu=0;nu<4;nu++){let trace=0;for(let a=0;a<4;a++)trace+=gamma[a][mu][nu]*field.gradient[a];result+=g[mu][nu]*(field.hessian[mu][nu]-trace);}
+    if(!Number.isFinite(result))throw new RangeError("dAlembertian is non-finite");return result;
+  },300);}
   dAlembertian(fn,x){return this._mapPoints(x,p=>{const g=inverse(this._g(p)),grad=this._partialScalar(fn,p),gamma=this.connection.christoffel(p);let result=0;for(let mu=0;mu<4;mu++)for(let nu=0;nu<4;nu++){const second=partial(q=>this._partialScalar(fn,q)[mu],p,nu,this.step);let trace=0;for(let a=0;a<4;a++)trace+=gamma[a][mu][nu]*grad[a];result+=g[mu][nu]*(second-trace);}if(!Number.isFinite(result))throw new RangeError("dAlembertian is non-finite");return result;},300);}
 }
 function LeviCivitaTensor(g){const root=-determinantRoot(g).root,symbol=(()=>{const e=zeros(4).map(()=>zeros(4).map(()=>zeros(4).map(()=>Array(4).fill(0))));for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++){const v=[a,b,c,d];if(new Set(v).size===4){let p=0;for(let i=0;i<4;i++)for(let j=i+1;j<4;j++)if(v[i]>v[j])p++;e[a][b][c][d]=p%2?-1:1;}}return e;})();return symbol.map(a=>a.map(b=>b.map(c=>c.map(v=>v*root))));}

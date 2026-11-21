@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Dual4,forwardJacobian4,DifferentialOperators4,Connection4,Geodesic4,Metric4} from "../src/relativity/index.js";
+import {Dual4,Jet4,forwardJacobian4,forwardHessian4,DifferentialOperators4,Connection4,Geodesic4,Metric4} from "../src/relativity/index.js";
 
 const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(3).divide(x[3].pow(2).add(1)));
 function expected([t,x,y,z]){const denominator=1+z*z;return [Math.cos(t)*Math.exp(x),Math.sin(t)*Math.exp(x),3*y*y/denominator,-2*z*y**3/denominator**2];}
@@ -113,4 +113,36 @@ test("forward divergence combines field and metric derivatives",()=>{
   assert.throws(()=>new DifferentialOperators4(metric,{metricDerivative:"bad"}),/metricDerivative/);
   assert.throws(()=>op.divergenceForward(p=>[p[0],0,0],points[0]),/4 components/);
   op.connection.metricDerivative="bad";assert.throws(()=>op.gradientForward(p=>p[0],points[0]),/metricDerivative/);
+});
+
+
+test("second-order jets match analytic scalar Hessians",()=>{
+  const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(2).multiply(x[3])),point=[.3,-.2,1.2,.4],result=forwardHessian4(field,point);
+  const [t,x,y,z]=point,s=Math.sin(t)*Math.exp(x),c=Math.cos(t)*Math.exp(x),gradient=[c,s,2*y*z,y*y],hessian=[[-s,c,0,0],[c,s,0,0],[0,0,2*z,2*y],[0,0,2*y,0]];
+  for(let i=0;i<4;i++){assert.ok(Math.abs(result.gradient[i]-gradient[i])<1e-12);for(let j=0;j<4;j++)assert.ok(Math.abs(result.hessian[i][j]-hessian[i][j])<1e-12);}
+  const op=new DifferentialOperators4(),batched=op.hessianForward(field,[point,point]);assert.deepEqual(batched[0],result.hessian);assert.deepEqual(batched[1],result.hessian);
+  const base=2**53,large=forwardHessian4(p=>p[0].subtract(base).pow(2),[base,0,0,0]);assert.equal(large.gradient[0],0);assert.equal(large.hessian[0][0],2);
+});
+
+test("second-order division, logarithm and square root follow analytic derivatives",()=>{
+  const quotient=forwardHessian4(x=>x[0].divide(x[1]),[3,2,0,0]);
+  assert.equal(quotient.value,1.5);assert.deepEqual(quotient.gradient,[.5,-.75,0,0]);assert.equal(quotient.hessian[0][1],-.25);assert.equal(quotient.hessian[1][0],-.25);assert.equal(quotient.hessian[1][1],.75);
+  const elementary=forwardHessian4(x=>x[0].log().add(x[1].sqrt()),[2,4,0,0]);assert.equal(elementary.hessian[0][0],-.25);assert.equal(elementary.hessian[1][1],-1/32);
+  const large=forwardHessian4(x=>x[0].log(),[1e155,0,0,0]);assert.ok(large.hessian[0][0]<0);assert.ok(Math.abs(large.hessian[0][0]/-1e-310-1)<1e-10);
+});
+
+test("forward wave operator handles flat and curved metrics",()=>{
+  const flat=new DifferentialOperators4(),quadratic=x=>x[0].pow(2).add(x[1].pow(2)).add(x[2].pow(2)).add(x[3].pow(2));
+  assert.ok(Math.abs(flat.dAlembertianForward(quadratic,[1,2,3,4])-4)<1e-12);
+  const metric=p=>[[-1,0,0,0],[0,p[0].multiply(.2).exp(),0,0],[0,0,1,0],[0,0,0,1]],curved=new DifferentialOperators4(metric,{metricDerivative:"forward"}),field=x=>x[0].pow(2).add(x[1].pow(2)),points=[[1,2,0,0],[2,2,0,0]];
+  const values=curved.dAlembertianForward(field,points);for(let i=0;i<points.length;i++){const t=points[i][0],expected=-2+2/Math.exp(.2*t)-.2*t;assert.ok(Math.abs(values[i]-expected)<1e-12);}
+  const base=2**53,largeMetric=p=>[[-1,0,0,0],[0,p[0].subtract(base).multiply(.2).exp(),0,0],[0,0,1,0],[0,0,0,1]],largeField=x=>x[0].subtract(base).pow(2).add(x[1].pow(2)),largeOp=new DifferentialOperators4(largeMetric,{metricDerivative:"forward"});
+  assert.ok(Math.abs(largeOp.dAlembertianForward(largeField,[base+4,2,0,0])-(-2+2/Math.exp(.8)-.8))<1e-12);
+});
+
+test("second-order jet domains and scalar output are validated",()=>{
+  const x=Jet4.variable(0,0),square=x.pow(2);assert.equal(square.hessian[0][0],2);assert.equal(x.pow(3).hessian[0][0],0);
+  assert.throws(()=>x.sqrt(),/positive/);assert.throws(()=>x.pow(1.5),/second derivative/);assert.throws(()=>x.divide(0),/zero/);assert.throws(()=>Math.sin(x),/implicitly converted/);
+  assert.throws(()=>forwardHessian4(p=>[p[0],p[1]],[1,2,3,4]),/scalar/);
+  assert.deepEqual(forwardHessian4(()=>5,[0,0,0,0]).hessian,Array.from({length:4},()=>[0,0,0,0]));
 });
