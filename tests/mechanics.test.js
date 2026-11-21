@@ -186,14 +186,17 @@ test("retarded-time bisection detects unrefinable time brackets",()=>{
   assert.equal(field.retardedTime([1e16,4,0,0]),1e16-4);
   assert.throws(()=>field.retardedTime([1e16,1,0,0]),/cannot be refined/);
 });
-test("retarded fields resolve small nonzero separations near the origin",()=>{
+test("retarded fields use Lib4's coordinate-scaled coincidence tolerance",()=>{
   const stationary=()=>[0,0,0];
   for(const distance of [1e-15,1e-200]){
     const field=new RetardedField(stationary,stationary,1,0,{c:1,epsilon0:1,tolerance:distance*1e-6});
-    const event=[0,distance,0,0],root=field.retardedTime(event),potential=field.retardedPotential(event);
-    assert.ok(Math.abs(root/distance+1)<1e-6);
-    assert.ok(Math.abs(potential[0]*distance*4*Math.PI-1)<1e-12);
+    const event=[0,distance,0,0];
+    assert.equal(field.retardedTime(event),0);
+    assert.throws(()=>field.retardedPotential(event),/singular/);
   }
+  const distantSource=new RetardedField(()=>[1e16,0,0],()=>[0,0,0],1,0,{c:1,epsilon0:1,tolerance:1e-12});
+  assert.equal(distantSource.retardedTime([0,1e16+2,0,0]),0);
+  assert.throws(()=>distantSource.retardedPotential([0,1e16+2,0,0]),/singular/);
 });
 test("electromagnetic dual accepts the constructor's relative antisymmetry tolerance",()=>{
   const value=1e6,offset=1e-5,field=new EMFieldTensor([[0,value,0,0],[-value+offset,0,0,0],[0,0,0,0],[0,0,0,0]],{c:1});
@@ -782,10 +785,12 @@ test("Maxwell history collocation aligns each interior frame, including batches"
 });
 
 
-test("retarded time respects representable separations at large spatial offsets",()=>{
+test("retarded time follows Lib4 coincidence tolerance at large spatial offsets",()=>{
   const stationary=()=>[0,0,0],atOrigin=new RetardedField(stationary,stationary,1,0,{c:1,epsilon0:1}),translated=new RetardedField(()=>[1e16,0,0],stationary,1,0,{c:1,epsilon0:1});
-  assert.ok(Math.abs(translated.retardedTime([10,1e16+2,0,0])-atOrigin.retardedTime([10,2,0,0]))<1e-12);
+  assert.ok(Math.abs(atOrigin.retardedTime([10,2,0,0])-8)<1e-12);
+  assert.equal(translated.retardedTime([10,1e16+2,0,0]),10);
+  assert.throws(()=>translated.retardedPotential([10,1e16+2,0,0]),/singular/);
   assert.equal(translated.retardedTime([10,1e16,0,0]),10);
-  const base=1.5e308,offset=base+2e292-base,large=new RetardedField(()=>[base,base,0],stationary,1,0,{c:1,epsilon0:1});
-  const root=large.retardedTime([0,base+2e292,base,0]);assert.ok(Math.abs(root/offset+1)<1e-14);
+  const base=1.5e308,large=new RetardedField(()=>[base,base,0],stationary,1,0,{c:1,epsilon0:1});
+  assert.equal(large.retardedTime([0,base+2e292,base,0]),0);
 });

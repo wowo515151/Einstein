@@ -367,10 +367,10 @@ export class RetardedField {
   retardedTime(event){
     const parsed=tensorShape(event,"event",{trailingSize:4}),samples=parsed.shape.slice(0,-1).reduce((count,size)=>count*size,1);if(samples*(this.maxIterations+3)>MAX_RETARDED_FIELD_BATCH_WORK)throw new RangeError("retarded-time batch exceeds the bounded root-work limit");return mapLastAxis(parsed.value,x=>this._retardedTimeScalar(x));
   }
-  _retardedTimeScalar(x,{nearCoincident=false}={}){
+  _retardedTimeScalar(x){
     const t=x[0]/this.c,position=x.slice(1);if(!Number.isFinite(t))throw new RangeError("observation time is non-finite");
     const now=vector(this.sourceWorldline(t),3,"source position"),distance=norm(sub(position,now));
-    const coincident=distance===0||(nearCoincident&&distance<=64*Number.EPSILON*Math.max(norm(position),norm(now)));
+    const coincident=distance<=64*Number.EPSILON*Math.max(1,norm(position),norm(now));
     const span=distance/(this.c-this.maxSpeed)+this.tolerance;
     let lo=t-span,hi=t;if(!Number.isFinite(distance)||!Number.isFinite(lo)||!Number.isFinite(span))throw new RangeError("retarded-time bracket is non-finite");
     const lowerSource=vector(this.sourceWorldline(lo),3,"source position"),lowerDistance=norm(sub(position,lowerSource)),lowerLightDistance=this.c*(t-lo),lowerResidual=lowerLightDistance-lowerDistance;
@@ -396,8 +396,8 @@ export class RetardedField {
     const parsed=tensorShape(event,"event",{trailingSize:4}),samples=parsed.shape.slice(0,-1).reduce((count,size)=>count*size,1);if(samples*(this.maxIterations+4)>MAX_RETARDED_FIELD_BATCH_WORK)throw new RangeError("retarded-potential batch exceeds the bounded work limit");return mapLastAxis(parsed.value,x=>this._retardedPotentialScalar(x));
   }
   _retardedPotentialScalar(x){
-    const tr=this._retardedTimeScalar(x,{nearCoincident:true}),position=x.slice(1),source=vector(this.sourceWorldline(tr),3,"source position"),velocity=vector(this.sourceVelocity(tr),3,"source velocity"),speed=norm(velocity),radius=norm(sub(position,source));
-    const positionScale=Math.max(norm(position),norm(source));
+    const tr=this._retardedTimeScalar(x),position=x.slice(1),source=vector(this.sourceWorldline(tr),3,"source position"),velocity=vector(this.sourceVelocity(tr),3,"source velocity"),speed=norm(velocity),radius=norm(sub(position,source));
+    const positionScale=Math.max(1,norm(position));
     if(speed>=this.c)throw new RangeError("source velocity must remain strictly subluminal");
     if(speed>this.maxSpeed+64*Number.EPSILON*this.c)throw new RangeError("source velocity exceeded the declared maxSpeed bound");
     if(radius===0||radius<=64*Number.EPSILON*positionScale)throw new RangeError("retarded potential is singular on or too close to the source worldline at this coordinate scale");
