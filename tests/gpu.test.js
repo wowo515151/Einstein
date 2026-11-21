@@ -142,6 +142,17 @@ test("Lorentz batches dispatch all four components through a simulated GPU devic
   });
 });
 
+test("disposing during a Lorentz batch readback falls back for all components",async()=>{
+  const started=deferred(),readback=deferred(),execution=mockExecutionDevice(()=>{started.resolve();return readback.promise;});
+  const vectors=[2,0,3,4],boost=LorentzTransform.boost([.6,0,0]),expected=await lorentzTransformBatch(vectors,boost,{backend:"cpu"});
+  await withMockGpu({requestAdapter:async()=>({requestDevice:async()=>execution.device})},async()=>{
+    const backend=new WebGPUBackend(),pending=lorentzTransformBatch(vectors,boost,{backend:"webgpu",gpu:backend});
+    await started.promise;backend.dispose();
+    assert.deepEqual(await pending,expected);assert.equal(backend.status,"disposed");assert.equal(backend.lastExecution,"cpu");assert.equal(execution.destroyedBuffers(),4);
+    readback.reject(new Error("late mapping failure"));await Promise.resolve();
+  });
+});
+
 test("plane-wave sampling provides CPU fields and validates inputs",async()=>{
   const fields=await samplePlaneWaveBatch([0,0,0,0,0,0,0,Math.PI/2],{backend:"cpu"});
   assert.deepEqual(fields[0],{electric:[1,0,0],magnetic:[0,1,0]});

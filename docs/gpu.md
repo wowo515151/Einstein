@@ -24,6 +24,6 @@ The CPU implementation is the reference path. `minkowskiDotBatch(left,right,{bac
 
 If a device is lost during pending readback, the operation falls back to CPU without waiting for the old mapping to settle. This behavior is covered by a simulated device-loss test; physical hardware behavior remains unverified.
 
-Disposing a backend also settles pending initialization, wave pipeline setup, and readback operations through CPU fallback; asynchronous device work may still finish later and is ignored.
+Disposing a backend also settles pending initialization, wave pipeline setup, and readback operations through CPU fallback; asynchronous device work may still finish later and is ignored. A simulated pending Lorentz-batch readback also settles through CPU fallback for the remaining components.
 
 Completed GPU readbacks remove their device-loss and disposal waiters, so routine repeated calculations do not retain one pending loss handler per readback.
