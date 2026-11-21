@@ -408,3 +408,14 @@ test("forward differentiation supports rectangular input trees",()=>{
   assert.throws(()=>forwardSecondOrderTree(()=>1,[[1],[2,3]]),/rectangular/);
   assert.throws(()=>forwardJacobianTree(()=>1,Array(33).fill(0)),/32-component/);
 });
+
+
+test("general Hessians cover every direction at the input-size boundary",()=>{
+  for(const n of [31,32]){
+    const point=Array.from({length:n},(_,i)=>(i+1)/n),coefficients=Array.from({length:n},(_,i)=>i+1),linear=point.reduce((sum,value,i)=>sum+value*coefficients[i],0);
+    const result=forwardSecondOrder(x=>{let sum=x[0].multiply(coefficients[0]);for(let i=1;i<n;i++)sum=sum.add(x[i].multiply(coefficients[i]));return sum.pow(2);},point);
+    assert.ok(Math.abs(result.value-linear*linear)<1e-8);
+    for(let i=0;i<n;i++){assert.ok(Math.abs(result.jacobian[i]-2*linear*coefficients[i])<1e-8);for(let j=0;j<n;j++)assert.equal(result.hessian[i][j],2*coefficients[i]*coefficients[j]);}
+  }
+  assert.throws(()=>forwardSecondOrder(()=>Array(63).fill(0),Array(32).fill(0)),/component limit/);
+});
