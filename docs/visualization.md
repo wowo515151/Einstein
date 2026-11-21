@@ -33,3 +33,5 @@ The light-cone readout classifies representative interior and exterior events as
 The weak-field lensing scene integrates null geodesics using explicit forward metric derivatives and fixed-step RK4. Its synthetic ray-bundle checks bound both null-norm drift and drift of the static metric’s conserved energy; this does not establish live rendering accuracy or make the softened teaching metric an exact black-hole solution.
 
 The sample inspector labels rendered coordinates as display coordinates. Where supplied by a scene, it also reports physical coordinate time and, for the twin worldlines, physical x and clock proper time; the twin scene’s display offsets and illustrative depth do not change those physical values. Lensing ray samples include their metric tangent norm as a numerical diagnostic.
+
+For supported spacetime samples, the inspector also reports the squared interval from the origin and the library’s vector classification. The `null` vector classification includes the zero vector at the cone apex; the scene’s causal readout separately calls that event coincident.
