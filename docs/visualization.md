@@ -25,3 +25,5 @@ The page's animation timer is managed by `visualizations/playback.js`; its injec
 Viewer setup is asynchronous. The app snapshots the requested scene and controls before mounting, then reapplies the current scene, time, observer frame, and parameter if they changed while the renderer was initializing. A failed post-mount update disposes the partially initialized viewer.
 
 Reset scene pauses playback and restores the default time, model parameter, observer frame, and camera view.
+
+The analytic embedding helper returns the flat far-field limit when its Gaussian profile underflows, including at finite coordinates whose squared radius overflows. The displayed grid uses a much smaller bounded range.

@@ -87,6 +87,7 @@ export function curvatureEmbeddingValues(beta, x, z) {
   if (beta < 0 || beta >= 1) throw new RangeError("beta must be in [0, 1)");
   const amplitude = .55 * beta, decay = .38, radiusSquared = x * x + z * z;
   const radius = Math.sqrt(radiusSquared), profile = Math.exp(-decay * radiusSquared);
+  if (profile === 0) return Object.freeze({ radialMetric: 1, gaussianCurvature: 0 });
   const first = -2 * decay * amplitude * radius * profile;
   const second = 2 * decay * amplitude * profile * (2 * decay * radiusSquared - 1);
   const radialMetric = 1 + first * first;
