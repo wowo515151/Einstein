@@ -152,6 +152,12 @@ test("electromagnetic dual accepts the constructor's relative antisymmetry toler
   assert.ok(Math.abs(dual[2][3]-expected)<1e-9);assert.equal(dual[3][2],-dual[2][3]);
   assert.equal(field.dual({orientation:-1}).components[2][3],-dual[2][3]);
 });
+test("four-momentum mass survives overflowing component-to-c ratios",()=>{
+  const c=1e-309,near=1-Number.EPSILON/2,expected=Math.sqrt((1-near)*(1+near))/c;
+  assert.equal(new FourMomentum([1,1,0,0],{c}).invariantMass(),0);
+  const mass=new FourMomentum([1,near,0,0],{c}).invariantMass();assert.ok(Math.abs(mass/expected-1)<1e-14);
+  assert.throws(()=>new FourMomentum([1,0,0,0],{c}).invariantMass(),/non-finite/);
+});
 test("four-momentum and four-velocity accessors validate mutable data and outputs",()=>{
   assert.throws(()=>new FourMomentum([1e308,0,0,0],{c:2}).energy(),/energy is non-finite/);
   assert.throws(()=>new FourVelocity([1,0,0,0],{c:1e-309}).gamma(),/gamma is non-finite/);

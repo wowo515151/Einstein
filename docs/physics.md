@@ -64,3 +64,5 @@ The electromagnetic dual accepts tensors admitted by the electromagnetic constru
 Four-current charge-density and spatial-current extraction validate the current component arrays; charge density rejects an unrepresentable non-finite result.
 
 Four-momentum and four-velocity accessors validate mutable component arrays; energy and gamma reject non-finite outputs.
+
+Invariant mass normalizes momentum before division when individual component-to-c ratios overflow, preserving selected representable near-null results.
