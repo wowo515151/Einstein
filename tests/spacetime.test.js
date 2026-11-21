@@ -2,6 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {Event4,SpacetimeInterval,LightCone,SpatialSlice,WorldlineSegment,Worldline,integrateRK4,ODEWorldline,LorentzTransform,PoincareTransform,InertialFrame} from "../src/relativity/index.js";
 
+test("event transforms reject reshaped Lorentz matrices",()=>{
+  const transform=LorentzTransform.identity({batchShape:[2]}),event=new Event4([0,0,0,0]);transform.matrix.push(LorentzTransform.identity().matrix);
+  assert.throws(()=>event.transform(transform),/Lorentz matrix batch shape cannot change/);
+  assert.throws(()=>event.transform(new PoincareTransform(transform)),/Lorentz matrix batch shape cannot change/);
+});
 test("piecewise worldline evaluates a long sequence at joins and beyond its endpoints",()=>{
   const segments=Array.from({length:128},(_,i)=>new WorldlineSegment([i,i*i,0,0],[i+1,(i+1)**2,0,0],[1,2*i,0,0],[1,2*(i+1),0,0],[i,i+1]));
   const worldline=new Worldline(segments),queries=[-1,0,0.5,31,63.25,64,127.5,128,129];

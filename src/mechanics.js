@@ -49,7 +49,7 @@ function mapLastAxis(value,fn){if(value.length===0)return [];return Array.isArra
 function mapBatches(value,batchRank,fn){if(batchRank===0)return fn(value);return value.map(item=>mapBatches(item,batchRank-1,fn));}
 function transformFourVectors(components,L,name){
   const current=tensorShape(components,`${name} components`,{trailingSize:4}),currentBatchShape=current.shape.slice(0,-1);
-  const raw=L instanceof LorentzTransform?L.matrix:L,parsed=tensorShape(raw,"Lorentz matrix",{trailingShape:[4,4]}),matrixBatchShape=parsed.shape.slice(0,-2),batchShape=broadcastShape(currentBatchShape,matrixBatchShape);
+  const raw=L instanceof LorentzTransform?L._checkedMatrix():L,parsed=tensorShape(raw,"Lorentz matrix",{trailingShape:[4,4]}),matrixBatchShape=parsed.shape.slice(0,-2),batchShape=broadcastShape(currentBatchShape,matrixBatchShape);
   if(batchShape.reduce((p,n)=>p*n,1)*4>MAX_MECHANICS_TENSOR_COMPONENTS)throw new RangeError(`${name} transform exceeds the component limit`);
   const cache=new Map();
   return nestedFrom(batchShape,index=>{
@@ -59,7 +59,7 @@ function transformFourVectors(components,L,name){
   });
 }
 function transformRankTwo(tensor,L,name){
-  const data=tensorShape(tensor,`${name} tensor`,{trailingShape:[4,4]}),batch=data.shape.slice(0,-2),parsed=tensorShape(L instanceof LorentzTransform?L.matrix:L,"Lorentz matrix",{trailingShape:[4,4]}),matrixBatch=parsed.shape.slice(0,-2),shape=broadcastShape(batch,matrixBatch);
+  const data=tensorShape(tensor,`${name} tensor`,{trailingShape:[4,4]}),batch=data.shape.slice(0,-2),parsed=tensorShape(L instanceof LorentzTransform?L._checkedMatrix():L,"Lorentz matrix",{trailingShape:[4,4]}),matrixBatch=parsed.shape.slice(0,-2),shape=broadcastShape(batch,matrixBatch);
   if(shape.reduce((p,n)=>p*n,1)*16>MAX_MECHANICS_TENSOR_COMPONENTS)throw new RangeError(`${name} transform exceeds the component limit`);
   const cache=new Map();return nestedFrom(shape,index=>{const sourceIndex=broadcastSourceIndex(matrixBatch,index,shape),key=sourceIndex.join(",");let transform=cache.get(key);if(!transform){transform=new LorentzTransform(broadcastGet(parsed.value,matrixBatch,index,shape),{validate:false});if(!transform.validate())throw new RangeError(`${name} requires a Lorentz transformation`);cache.set(key,transform);}const matrix=transform.matrix,value=broadcastGet(data.value,batch,index,shape);return mmul(mmul(matrix,value),transpose(matrix));});
 }

@@ -273,6 +273,12 @@ test("bivector contraction and Hodge dual use custom Lorentz metrics",()=>{
   const twice=field.dual(metric).dual(metric).components;
   for(let i=0;i<4;i++)for(let j=0;j<4;j++)assert.ok(Math.abs(twice[i][j]+field.components[i][j])<1e-12);
 });
+test("Lorentz operations reject reshaped mutable matrices",()=>{
+  const transform=LorentzTransform.identity({batchShape:[2]}),identity=LorentzTransform.identity(),tensor=new Tensor4([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],["up","up"]);
+  transform.matrix.push(identity.matrix);
+  for(const operation of [()=>transform.validate(),()=>transform.compose(identity),()=>identity.compose(transform),()=>transform.inverse(),()=>transform.applyVector([1,0,0,0]),()=>transform.applyTensor(tensor),()=>transform.applyTensor(tensor.components),()=>new PoincareTransform(transform).applyEvent([0,0,0,0])])
+    assert.throws(operation,/Lorentz matrix batch shape cannot change/);
+});
 test("metric and tensor batch metadata cannot be overwritten",()=>{
   const metric=Metric4.minkowski({batchShape:[2]}),tensor=new Tensor4([[1,0,0,0],[0,1,0,0]],["up"]);
   for(const value of [metric,tensor]){assert.equal(Reflect.set(value,"batchShape",[9]),false);assert.equal(Reflect.set(value,"batchRank",0),false);assert.deepEqual(value.batchShape,[2]);}

@@ -146,6 +146,12 @@ test("retarded fields resolve small nonzero separations near the origin",()=>{
     assert.ok(Math.abs(potential[0]*distance*4*Math.PI-1)<1e-12);
   }
 });
+test("mechanics transforms reject reshaped Lorentz matrices",()=>{
+  const transform=LorentzTransform.identity({batchShape:[2]});transform.matrix.push(LorentzTransform.identity().matrix);
+  const current=FourCurrent.fromChargeCurrent(1,[0,0,0],{c:1}),field=EMFieldTensor.fromEB([1,0,0],[0,1,0],{c:1});
+  assert.throws(()=>current.transform(transform),/Lorentz matrix batch shape cannot change/);
+  assert.throws(()=>field.transform(transform),/Lorentz matrix batch shape cannot change/);
+});
 test("four-current construction preserves charge and current components",()=>{
   const j=FourCurrent.fromChargeCurrent(2,[3,4,5],{c:10});assert.equal(j.chargeDensity(),2);assert.deepEqual(j.spatialCurrent(),[3,4,5]);
   assert.ok(j.transform(LorentzTransform.boost([.2,0,0])).components.every(Number.isFinite));
