@@ -222,10 +222,13 @@ export class Connection4 {
 }
 
 export class Curvature4 {
-  constructor(metric,{step=1e-5}={}){this.metric=metric;this.step=validateDifferenceStep(step);this.connection=new Connection4(metric,{step:this.step});}
+  constructor(metric,{step=1e-5,metricDerivative="finite"}={}){if(!["finite","forward"].includes(metricDerivative))throw new TypeError("metricDerivative must be finite or forward");this.metric=metric;this.step=validateDifferenceStep(step);this.metricDerivative=metricDerivative;this.connection=new Connection4(metric,{step:this.step,metricDerivative});}
+  _metricAt(point){return this.metricDerivative==="forward"?forwardSecondOrder4(this.metric,point).value:this.metric(point);}
   _mapPoints(x,components,operation,workPerPoint=4096){const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),batchCount=batchShape.reduce((count,size)=>count*size,1),outputComponents=batchCount*components;if(outputComponents>MAX_COVARIANT_COMPONENTS)throw new RangeError("curvature batch exceeds the bounded component limit");if(batchCount*workPerPoint>MAX_CURVATURE_BATCH_WORK)throw new RangeError("curvature batch exceeds the bounded work limit");return geometryBuildBatch(batchShape,index=>operation(geometryBatchGet(parsed.data,batchShape,index,batchShape)));}
   riemann(x){return this._mapPoints(x,256,point=>this._riemannScalar(point));}
   _riemannScalar(p){
+    if(this.metricDerivative==="forward")return this._riemannForwardScalar(p);
+    if(this.metricDerivative!=="finite")throw new TypeError("metricDerivative must be finite or forward");
     const g=this.connection.christoffel(p);
     const dg=Array.from({length:4},(_,d)=>{
       const stencil=differenceStencil(p,d,this.step);
@@ -240,11 +243,29 @@ export class Curvature4 {
     }
     return R;
   }
+  _riemannForwardScalar(p){
+    const field=forwardSecondOrder4(this.metric,p),g=geometryMetric(field.value),gi=inverse(g),dg=field.jacobian,ddg=field.hessian;
+    const gamma=Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0)));
+    const derivative=Array.from({length:4},()=>Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0))));
+    const inverseDerivative=Array.from({length:4},()=>zeros(4));
+    for(let e=0;e<4;e++)for(let a=0;a<4;a++)for(let d=0;d<4;d++)for(let i=0;i<4;i++)for(let j=0;j<4;j++)inverseDerivative[e][a][d]-=gi[a][i]*dg[i][j][e]*gi[j][d];
+    for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++){
+      const q=dg[d][c][b]+dg[d][b][c]-dg[b][c][d];gamma[a][b][c]+=.5*gi[a][d]*q;
+      for(let e=0;e<4;e++)derivative[e][a][b][c]+=.5*(inverseDerivative[e][a][d]*q+gi[a][d]*(ddg[d][c][b][e]+ddg[d][b][c][e]-ddg[b][c][d][e]));
+    }
+    const R=Array.from({length:4},()=>Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0))));
+    for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++){
+      let value=derivative[c][a][d][b]-derivative[d][a][c][b];
+      for(let e=0;e<4;e++)value+=gamma[a][c][e]*gamma[e][d][b]-gamma[a][d][e]*gamma[e][c][b];
+      if(!Number.isFinite(value))throw new RangeError("Riemann curvature is non-finite");R[a][b][c][d]=value;
+    }
+    return R;
+  }
   ricci(x){return this._mapPoints(x,16,point=>this._ricciTensorScalar(point));}
   _ricciTensorScalar(point){const R=this._riemannScalar(point),out=zeros(4);for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)out[a][b]+=R[c][a][c][b];if(out.some(row=>row.some(value=>!Number.isFinite(value))))throw new RangeError("Ricci tensor is non-finite");return out;}
-  ricciScalar(x){return this._mapPoints(x,1,point=>{const raw=this.metric(point),g=inverse(geometryMetric(raw)),r=this._ricciTensorScalar(point);let scalar=0;for(let a=0;a<4;a++)for(let b=0;b<4;b++)scalar+=g[a][b]*r[a][b];if(!Number.isFinite(scalar))throw new RangeError("Ricci scalar is non-finite");return scalar;});}
-  einsteinTensor(x){return this._mapPoints(x,16,point=>{const r=this._ricciTensorScalar(point),raw=this.metric(point),g=geometryMetric(raw),inverseMetric=inverse(g);let scalar=0;for(let a=0;a<4;a++)for(let b=0;b<4;b++)scalar+=inverseMetric[a][b]*r[a][b];if(!Number.isFinite(scalar))throw new RangeError("Einstein tensor curvature scalar is non-finite");const result=r.map((row,i)=>row.map((value,j)=>value-.5*g[i][j]*scalar));if(result.some(row=>row.some(value=>!Number.isFinite(value))))throw new RangeError("Einstein tensor is non-finite");return result;});}
-  kretschmannScalar(x){return this._mapPoints(x,1,point=>{const R=this._riemannScalar(point),raw=this.metric(point),g=geometryMetric(raw),gi=inverse(g),lower=zeros(4).map(()=>zeros(4).map(()=>zeros(4).map(()=>Array(4).fill(0))));for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)for(let e=0;e<4;e++)lower[a][b][c][d]+=g[a][e]*R[e][b][c][d];let sum=0;for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)for(let A=0;A<4;A++)for(let B=0;B<4;B++)for(let Cc=0;Cc<4;Cc++)for(let D=0;D<4;D++)sum+=gi[a][A]*gi[b][B]*gi[c][Cc]*gi[d][D]*lower[a][b][c][d]*lower[A][B][Cc][D];if(!Number.isFinite(sum))throw new RangeError("Kretschmann scalar is non-finite");return sum;},70_000);}
+  ricciScalar(x){return this._mapPoints(x,1,point=>{const raw=this._metricAt(point),g=inverse(geometryMetric(raw)),r=this._ricciTensorScalar(point);let scalar=0;for(let a=0;a<4;a++)for(let b=0;b<4;b++)scalar+=g[a][b]*r[a][b];if(!Number.isFinite(scalar))throw new RangeError("Ricci scalar is non-finite");return scalar;});}
+  einsteinTensor(x){return this._mapPoints(x,16,point=>{const r=this._ricciTensorScalar(point),raw=this._metricAt(point),g=geometryMetric(raw),inverseMetric=inverse(g);let scalar=0;for(let a=0;a<4;a++)for(let b=0;b<4;b++)scalar+=inverseMetric[a][b]*r[a][b];if(!Number.isFinite(scalar))throw new RangeError("Einstein tensor curvature scalar is non-finite");const result=r.map((row,i)=>row.map((value,j)=>value-.5*g[i][j]*scalar));if(result.some(row=>row.some(value=>!Number.isFinite(value))))throw new RangeError("Einstein tensor is non-finite");return result;});}
+  kretschmannScalar(x){return this._mapPoints(x,1,point=>{const R=this._riemannScalar(point),raw=this._metricAt(point),g=geometryMetric(raw),gi=inverse(g),lower=zeros(4).map(()=>zeros(4).map(()=>zeros(4).map(()=>Array(4).fill(0))));for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)for(let e=0;e<4;e++)lower[a][b][c][d]+=g[a][e]*R[e][b][c][d];let sum=0;for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)for(let A=0;A<4;A++)for(let B=0;B<4;B++)for(let Cc=0;Cc<4;Cc++)for(let D=0;D<4;D++)sum+=gi[a][A]*gi[b][B]*gi[c][Cc]*gi[d][D]*lower[a][b][c][d]*lower[A][B][Cc][D];if(!Number.isFinite(sum))throw new RangeError("Kretschmann scalar is non-finite");return sum;},70_000);}
 }
 
 export class Geodesic4 {

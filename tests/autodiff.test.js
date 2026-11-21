@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Dual4,Jet4,forwardJacobian4,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4} from "../src/relativity/index.js";
+import {Dual4,Jet4,forwardJacobian4,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4} from "../src/relativity/index.js";
 
 const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(3).divide(x[3].pow(2).add(1)));
 function expected([t,x,y,z]){const denominator=1+z*z;return [Math.cos(t)*Math.exp(x),Math.sin(t)*Math.exp(x),3*y*y/denominator,-2*z*y**3/denominator**2];}
@@ -164,4 +164,28 @@ test("second-order rectangular fields enforce output and batch bounds",()=>{
   assert.throws(()=>forwardSecondOrder4(()=>Array(3121).fill(0),p),/component limit/);
   assert.throws(()=>forwardSecondOrder4(()=>[NaN],p),/finite/);
   assert.throws(()=>new DifferentialOperators4().tensorHessianForward(q=>q[0].value===0?[q[0]]:[q[0],q[1]],[p,[1,0,0,0]]),/shape/);
+});
+
+
+test("forward metric curvature reproduces analytic de Sitter invariants at large coordinates",()=>{
+  const H=.2,base=2**53,metric=p=>{const a=p[0].subtract(base).multiply(2*H).exp();return [[-1,0,0,0],[0,a,0,0],[0,0,a,0],[0,0,0,a]];};
+  const curvature=new Curvature4(metric,{metricDerivative:"forward"});
+  for(const t of [base,base+2]){
+    const point=[t,0,0,0],a=Math.exp(2*H*(t-base)),g=[[-1,0,0,0],[0,a,0,0],[0,0,a,0],[0,0,0,a]],R=curvature.riemann(point);
+    for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)for(let l=0;l<4;l++)assert.ok(Math.abs(R[i][j][k][l]-H*H*((i===k?g[j][l]:0)-(i===l?g[j][k]:0)))<1e-12);
+    const ricci=curvature.ricci(point),einstein=curvature.einsteinTensor(point);
+    for(let i=0;i<4;i++)for(let j=0;j<4;j++){assert.ok(Math.abs(ricci[i][j]-3*H*H*g[i][j])<1e-12);assert.ok(Math.abs(einstein[i][j]+3*H*H*g[i][j])<1e-12);}
+    assert.ok(Math.abs(curvature.ricciScalar(point)-12*H*H)<1e-12);assert.ok(Math.abs(curvature.kretschmannScalar(point)-24*H**4)<1e-12);
+  }
+  assert.deepEqual(curvature.riemann([[base,0,0,0],[base,0,0,0]])[0],curvature.riemann([base,0,0,0]));
+  assert.throws(()=>new Curvature4(metric,{metricDerivative:"other"}),/metricDerivative/);
+});
+
+
+test("forward curvature agrees with finite differences for a non-diagonal metric",()=>{
+  const metric=p=>[[-1,p[2],0,0],[p[2],1,0,0],[0,0,1,0],[0,0,0,1]],point=[0,0,.3,0];
+  const forward=new Curvature4(metric,{metricDerivative:"forward"}).riemann(point),numeric=new Curvature4(metric,{step:1e-4}).riemann(point);
+  assert.ok(forward.flat(3).some(v=>Math.abs(v)>.01));
+  forward.flat(3).forEach((v,i)=>assert.ok(Math.abs(v-numeric.flat(3)[i])<1e-6));
+  const c=new Curvature4(metric,{metricDerivative:"forward"});c.metricDerivative="bad";assert.throws(()=>c.riemann(point),/metricDerivative/);
 });
