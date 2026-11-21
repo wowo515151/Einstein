@@ -455,3 +455,11 @@ test("dispose releases the device and prevents later reinitialization",async()=>
     assert.equal(backend.lastExecution,"cpu");
   });
 });
+
+
+test("CPU plane wave recovers a finite phase after coordinate subtraction overflow",async()=>{
+  const events=[-1e308,0,0,1e308],waveNumber=1e-308,expected=Math.cos(2*(1e308*waveNumber));
+  const cpu=await samplePlaneWaveBatch(events,{waveNumber,backend:"cpu"});assert.ok(Math.abs(cpu[0].electric[0]-expected)<1e-15);
+  const auto=await samplePlaneWaveBatch(events,{waveNumber,backend:"auto"});assert.deepEqual(auto,cpu);
+  await assert.rejects(()=>samplePlaneWaveBatch(events,{waveNumber:1,backend:"cpu"}),/phase/);
+});

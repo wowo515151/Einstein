@@ -1,4 +1,5 @@
 import {LorentzTransform} from "./algebra.js";
+import {weightedDot4} from "./weighted-dot-internal.js";
 
 const MAX_BATCH_VECTORS=262_144;
 const FLOAT32_MAX=3.402823466e38;
@@ -256,7 +257,7 @@ export async function spacetimeIntervalSquaredBatch(start,end,options={}){
 
 function validateEvents(events,waveNumber){if(!Array.isArray(events)&&!ArrayBuffer.isView(events))throw new TypeError("events must be a numeric array");if(events.length%4!==0||events.length/4>MAX_BATCH_VECTORS)throw new RangeError("events must be bounded groups of four coordinates");if(!Number.isFinite(waveNumber)||waveNumber<=0)throw new RangeError("waveNumber must be positive and finite");for(const value of events)if(typeof value!=="number"||!Number.isFinite(value))throw new TypeError("events must contain finite coordinates");}
 function fieldsFromAmplitudes(amplitudes){return amplitudes.map(amplitude=>({electric:[amplitude,0,0],magnetic:[0,amplitude,0]}));}
-function cpuPlaneWave(events,waveNumber){const amplitudes=[];for(let i=0;i<events.length;i+=4){const phase=waveNumber*(events[i+3]-events[i]);if(!Number.isFinite(phase))throw new RangeError("plane-wave phase is non-finite");amplitudes.push(Math.cos(phase));}return fieldsFromAmplitudes(amplitudes);}
+function cpuPlaneWave(events,waveNumber){const amplitudes=[];for(let i=0;i<events.length;i+=4){let phase=waveNumber*(events[i+3]-events[i]);if(!Number.isFinite(phase))phase=weightedDot4([events[i+3],events[i],0,0],[waveNumber,waveNumber,0,0],[1,-1,0,0]);if(!Number.isFinite(phase))throw new RangeError("plane-wave phase is non-finite");amplitudes.push(Math.cos(phase));}return fieldsFromAmplitudes(amplitudes);}
 export async function samplePlaneWaveBatch(events,{waveNumber=1,backend="auto",gpu=null}={}){validateEvents(events,waveNumber);if(backend==="cpu")return cpuPlaneWave(events,waveNumber);if(backend!=="auto"&&backend!=="webgpu")throw new TypeError("backend must be auto, cpu, or webgpu");const instance=gpu??new WebGPUBackend();try{return await instance.samplePlaneWaveBatch(events,waveNumber);}finally{if(gpu==null)instance.dispose();}}
 
 /** Sample a bounded rectangular spatial grid at one coordinate time. */

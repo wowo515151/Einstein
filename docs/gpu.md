@@ -27,3 +27,5 @@ If a device is lost during pending readback, the operation falls back to CPU wit
 Disposing a backend also settles pending initialization, wave pipeline setup, and readback operations through CPU fallback; asynchronous device work may still finish later and is ignored. A simulated pending Lorentz-batch readback also settles through CPU fallback for the remaining components.
 
 Completed GPU readbacks remove their device-loss and disposal waiters, so routine repeated calculations do not retain one pending loss handler per readback.
+
+The CPU plane-wave reference can recover a finite scaled phase when subtracting two large finite coordinates would overflow first. It still rejects a phase that is itself non-finite, and floating-point argument reduction limits apply for very large finite phases.
