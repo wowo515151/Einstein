@@ -31,8 +31,9 @@ function eachIndex(rank,visit,prefix=[]){if(prefix.length===rank){visit(prefix);
 function eachShapeIndex(shape,visit,prefix=[]){if(prefix.length===shape.length){visit(prefix);return;}for(let i=0;i<shape[prefix.length];i++)eachShapeIndex(shape,visit,[...prefix,i]);}
 
 export class DifferentialOperators4 {
-  constructor(metric=null,{step=1e-5}={}){this.metric=metric;this.step=validateDifferenceStep(step);this.connection=new Connection4(x=>this._g(x),{step:this.step});}
-  _g(x){const g=typeof this.metric==="function"?this.metric(x):(this.metric??new Metric4().components);return geometryMetric(g);}
+  constructor(metric=null,{step=1e-5,metricDerivative="finite"}={}){this.metric=metric;this.step=validateDifferenceStep(step);this.connection=new Connection4(x=>this._rawMetric(x),{step:this.step,metricDerivative});}
+  _rawMetric(x){const g=typeof this.metric==="function"?this.metric(x):(this.metric??new Metric4().components);return g instanceof Metric4?g._checkedComponents().data:g;}
+  _g(x){const mode=this.connection.metricDerivative;if(!["finite","forward"].includes(mode))throw new TypeError("metricDerivative must be finite or forward");if(mode==="forward"&&typeof this.metric==="function")return geometryMetric(forwardJacobian4(p=>this._rawMetric(p),x).value);return geometryMetric(this._rawMetric(x));}
   _mapPoints(x,operation,workPerPoint=1){const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),batchCount=batchShape.reduce((count,size)=>count*size,1),firstIndex=Array(batchShape.length).fill(0);if(typeof workPerPoint==="number"&&batchCount*workPerPoint>MAX_DIFFERENTIAL_BATCH_WORK)throw new RangeError("differential-operator batch exceeds the bounded work limit");const firstPoint=geometryBatchGet(parsed.data,batchShape,firstIndex,batchShape),firstValue=operation(firstPoint),shape=numericTreeShape(firstValue),components=shape.reduce((count,size)=>count*size,1);if(batchCount*components>MAX_COVARIANT_COMPONENTS)throw new RangeError("differential-operator batch exceeds the bounded component limit");if(typeof workPerPoint==="function"&&batchCount*workPerPoint(firstValue,components)>MAX_DIFFERENTIAL_BATCH_WORK)throw new RangeError("differential-operator batch exceeds the bounded work limit");if(!batchShape.length)return firstValue;return geometryBuildBatch(batchShape,index=>{if(index.every((value,axis)=>value===firstIndex[axis]))return firstValue;const result=operation(geometryBatchGet(parsed.data,batchShape,index,batchShape));if(JSON.stringify(numericTreeShape(result))!==JSON.stringify(shape))throw new RangeError("field result shape must remain constant across batch samples");return result;});}
   partial(fn,x){return this._mapPoints(x,p=>this._jacobianScalar(fn,p),(_value,components)=>Math.ceil(13*components/4));}
   _partialScalar(fn,p){return Array.from({length:4},(_,i)=>partial(fn,p,i,this.step));}
@@ -57,6 +58,11 @@ export class DifferentialOperators4 {
   jacobianForward(fn,x){return this._mapPoints(x,p=>forwardJacobian4(fn,p).jacobian,(_value,components)=>2*components);}
   gradientForward(fn,x){return this._mapPoints(x,p=>{const field=forwardJacobian4(fn,p);if(typeof field.value!=="number")throw new TypeError("gradient requires a scalar field");const result=mvec(inverse(this._g(p)),field.jacobian);if(result.some(value=>!Number.isFinite(value)))throw new RangeError("gradient is non-finite");return result;},16);}
   gradient(fn,x){return this._mapPoints(x,p=>{const result=mvec(inverse(this._g(p)),this._partialScalar(fn,p));if(result.some(value=>!Number.isFinite(value)))throw new RangeError("gradient is non-finite");return result;},16);}
+  divergenceForward(fn,x){return this._mapPoints(x,p=>{
+    const differentiated=forwardJacobian4(fn,p),v=vector(differentiated.value),d=differentiated.jacobian,gamma=this.connection.christoffel(p);let out=0;
+    for(let a=0;a<4;a++){out+=d[a][a];for(let b=0;b<4;b++)out+=gamma[a][a][b]*v[b];}
+    if(!Number.isFinite(out))throw new RangeError("divergence is non-finite");return out;
+  },128);}
   divergence(fn,x){return this._mapPoints(x,p=>{const v=vector(fn(p)),d=this._jacobianScalar(fn,p),gamma=this.connection.christoffel(p);let out=0;for(let a=0;a<4;a++){out+=d[a][a];for(let b=0;b<4;b++)out+=gamma[a][a][b]*v[b];}if(!Number.isFinite(out))throw new RangeError("divergence is non-finite");return out;},128);}
   exteriorDerivativeForward(form,x){return this._mapPoints(x,p=>{
     const differentiated=forwardJacobian4(form,p),shape=tensorShape(differentiated.value),rank=shape.length,inputComponents=shape.reduce((product,size)=>product*size,1),outputComponents=inputComponents*4;

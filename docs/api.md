@@ -53,7 +53,7 @@ See [Differential geometry](geometry.md) for metric callbacks, finite-difference
 
 | Type | Operations |
 | --- | --- |
-| `DifferentialOperators4` | `partial`, `jacobian`, `gradient`, `divergence`, `exteriorDerivative`, `hodgeDual`, and `dAlembertian` evaluate field derivatives and related operators. `partialForward`, `jacobianForward`, `gradientForward`, and `exteriorDerivativeForward` offer explicit first-order dual-number differentiation. |
+| `DifferentialOperators4` | `partial`, `jacobian`, `gradient`, `divergence`, `exteriorDerivative`, `hodgeDual`, and `dAlembertian` evaluate field derivatives and related operators. `partialForward`, `jacobianForward`, `gradientForward`, `divergenceForward`, and `exteriorDerivativeForward` offer explicit first-order dual-number differentiation. |
 | `Connection4` | `christoffel`, `covariantDerivativeVector`, `covariantDerivative`, `parallelTransport`, and `geodesicAcceleration` use the metric connection; `christoffelForward` accepts an explicitly dual-compatible metric, and `{metricDerivative:"forward"}` selects it for connection workflows. `covariantDerivativeForward` differentiates an explicitly dual-compatible field. |
 | `Curvature4` | `riemann`, `ricci`, `ricciScalar`, `einsteinTensor`, and `kretschmannScalar` compute curvature quantities. |
 | `Geodesic4` | `integrate` produces samples along an initial-value geodesic; `solveBoundary` shoots for an endpoint. The `components` format returns separate parameter, event, and tangent histories. |

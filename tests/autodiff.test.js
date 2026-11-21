@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Dual4,forwardJacobian4,DifferentialOperators4,Connection4,Geodesic4} from "../src/relativity/index.js";
+import {Dual4,forwardJacobian4,DifferentialOperators4,Connection4,Geodesic4,Metric4} from "../src/relativity/index.js";
 
 const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(3).divide(x[3].pow(2).add(1)));
 function expected([t,x,y,z]){const denominator=1+z*z;return [Math.cos(t)*Math.exp(x),Math.sin(t)*Math.exp(x),3*y*y/denominator,-2*z*y**3/denominator**2];}
@@ -100,4 +100,17 @@ test("forward exterior derivatives preserve form signs and batches",()=>{
   const twoForm=p=>{const q=p[2].multiply(p[3]);return [[0,q,0,0],[q.negate(),0,0,0],[0,0,0,0],[0,0,0,0]];},d2=op.exteriorDerivativeForward(twoForm,[0,0,2,3]);
   assert.equal(d2[2][0][1],3);assert.equal(d2[0][2][1],-3);assert.equal(d2[3][0][1],2);
   assert.throws(()=>op.exteriorDerivativeForward(()=>[1,2,3],[0,0,0,0]),/length 4/);
+});
+
+
+test("forward divergence combines field and metric derivatives",()=>{
+  const base=2**53,metric=p=>[[-1,0,0,0],[0,p[0].subtract(base).multiply(.2).exp(),0,0],[0,0,1,0],[0,0,0,1]],field=p=>[p[0].subtract(base),0,0,0],points=[[base,2,0,0],[base+4,2,0,0]];
+  const op=new DifferentialOperators4(metric,{metricDerivative:"forward"}),result=op.divergenceForward(field,points);
+  assert.ok(Math.abs(result[0]-1)<1e-12);assert.ok(Math.abs(result[1]-1.4)<1e-12);
+  const raised=op.gradientForward(p=>p[1].pow(2),points[1]);assert.ok(Math.abs(raised[1]-4/Math.exp(.8))<1e-12);
+  assert.equal(new DifferentialOperators4().divergenceForward(p=>[p[0].multiply(2),0,0,0],[1,0,0,0]),2);
+  assert.equal(new DifferentialOperators4(Metric4.minkowski(),{metricDerivative:"forward"}).divergenceForward(p=>[p[0].multiply(2),0,0,0],[1,0,0,0]),2);
+  assert.throws(()=>new DifferentialOperators4(metric,{metricDerivative:"bad"}),/metricDerivative/);
+  assert.throws(()=>op.divergenceForward(p=>[p[0],0,0],points[0]),/4 components/);
+  op.connection.metricDerivative="bad";assert.throws(()=>op.gradientForward(p=>p[0],points[0]),/metricDerivative/);
 });

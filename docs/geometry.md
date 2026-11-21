@@ -8,12 +8,12 @@ Each callback accepts a single four-coordinate array. The position argument `x` 
 
 | Call | Returns |
 | --- | --- |
-| `new DifferentialOperators4(metric,{step})` | An operator set. The metric may be a function, a constant matrix, or omitted for Minkowski; `step` defaults to `1e-5`. |
+| `new DifferentialOperators4(metric,{step,metricDerivative})` | An operator set. The metric may be a function, a constant matrix, or omitted for Minkowski; `step` defaults to `1e-5`. Set `metricDerivative:"forward"` for a dual-compatible metric callback. |
 | `ops.partial(field,x)`, `ops.jacobian(field,x)` | Derivatives of a scalar or rectangular array-valued field, with a final axis of four coordinate derivatives. Output arrays must be finite, nonempty, acyclic, and rank eight or less, subject to the work and component bounds. |
 | `ops.gradient(scalarField,x)` | A metric-raised four-component gradient. |
 | `ops.partialForward(field,x)`, `ops.jacobianForward(field,x)` | First derivatives using explicit `Dual4` operations, with the same derivative-axis and batch conventions. |
 | `ops.gradientForward(scalarField,x)` | Metric-raised scalar gradient using explicit first-order forward differentiation. |
-| `ops.divergence(vectorField,x)` | The covariant divergence as a number or batch. |
+| `ops.divergence(vectorField,x)`, `ops.divergenceForward(vectorField,x)` | The covariant divergence as a number or batch; the forward variant differentiates a dual-compatible field and uses the configured metric derivative method. |
 | `ops.exteriorDerivative(form,x)`, `ops.exteriorDerivativeForward(form,x)` | Components of the exterior derivative of a covariant form; the latter uses an explicitly dual-compatible callback. |
 | `ops.hodgeDual(twoForm,x)` | Covariant dual two-form components; `x` is required for a position-dependent metric. |
 | `ops.dAlembertian(scalarField,x)` | The scalar covariant wave operator, as a number or batch. |
@@ -30,7 +30,7 @@ const gradient = ops.gradientForward(field, [2, 0, 0, 0]);
 // Minkowski raised gradient: [-4, 1, 0, 0]
 ```
 
-`partialForward`, `jacobianForward`, `gradientForward`, and `exteriorDerivativeForward` also accept supported coordinate batches. This is an opt-in first-order API, not a general PyTorch replacement: it does not differentiate ordinary JavaScript callbacks automatically, provide higher derivatives, or automatically differentiate curvature, divergence, or wave-operator calculations. `Connection4.christoffelForward` separately accepts a dual-compatible metric callback for first-order metric derivatives. Constructing a connection with `{metricDerivative:"forward"}` uses that path in its ordinary Christoffel, acceleration, covariant-derivative, parallel-transport, and geodesic workflows. `covariantDerivativeForward` and `covariantDerivativeVectorForward` explicitly differentiate a dual-compatible field; combine them with forward metric derivatives to avoid finite stencils for both parts. Ordinary covariant derivatives and subsequent curvature calculations are not automatically differentiated. Accessing `.value` explicitly or branching on it can discard derivative information; use such operations only when mathematically appropriate.
+`partialForward`, `jacobianForward`, `gradientForward`, `divergenceForward`, and `exteriorDerivativeForward` also accept supported coordinate batches. This is an opt-in first-order API, not a general PyTorch replacement: it does not differentiate ordinary JavaScript callbacks automatically, provide higher derivatives, or automatically differentiate curvature or wave-operator calculations. `Connection4.christoffelForward` separately accepts a dual-compatible metric callback for first-order metric derivatives. Constructing a connection with `{metricDerivative:"forward"}` uses that path in its ordinary Christoffel, acceleration, covariant-derivative, parallel-transport, and geodesic workflows. `covariantDerivativeForward` and `covariantDerivativeVectorForward` explicitly differentiate a dual-compatible field; combine them with forward metric derivatives to avoid finite stencils for both parts. Ordinary covariant derivatives and subsequent curvature calculations are not automatically differentiated. Accessing `.value` explicitly or branching on it can discard derivative information; use such operations only when mathematically appropriate.
 
 ## Connection and curvature
 
