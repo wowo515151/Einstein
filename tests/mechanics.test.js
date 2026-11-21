@@ -125,6 +125,13 @@ test("four-momentum broadcasts mass and velocity batches through observables and
   for(let i=0;i<2;i++)for(let j=0;j<2;j++)assert.deepEqual(boosted.components[i][j],new LorentzTransform(matrices[i][0]).applyVector(p.components[i][j]).components);
   assert.throws(()=>FourMomentum.fromMassVelocity(-1,[0,0,0],1),/nonnegative/);
 });
+test("retarded-time rejects a bracket inconsistent with source motion",()=>{
+  const velocity=()=>[.5,0,0],position=t=>[.5*t,0,0],event=[0,1,0,0];
+  const bad=new RetardedField(position,velocity,1,0,{c:1,epsilon0:1,tolerance:1e-12});
+  assert.throws(()=>bad.retardedTime(event),/bracket does not contain a root/);
+  const bounded=new RetardedField(position,velocity,1,.5,{c:1,epsilon0:1,tolerance:1e-12});
+  assert.ok(Math.abs(bounded.retardedTime(event)+2)<1e-12);
+});
 test("retarded-time bisection detects unrefinable time brackets",()=>{
   const stationary=()=>[0,0,0],field=new RetardedField(stationary,stationary,1,0,{c:1,epsilon0:1,tolerance:1e-12});
   assert.equal(field.retardedTime([1e16,4,0,0]),1e16-4);

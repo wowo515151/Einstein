@@ -299,7 +299,7 @@ function ungridScalar(values,shape){const [nx,ny,nz]=shape,out=[];let index=0;fo
 export class RetardedField {
   constructor(sourceWorldline,sourceVelocity,charge,maxSpeed,{c=C,epsilon0=8.8541878128e-12,maxIterations=96,tolerance=1e-12}={}){finiteNumber(charge,"charge");finiteNumber(maxSpeed,"maxSpeed");finiteNumber(c,"c");finiteNumber(epsilon0,"epsilon0");if(typeof sourceWorldline!=="function"||typeof sourceVelocity!=="function")throw new TypeError("sourceWorldline and sourceVelocity must be functions");if(maxSpeed<0||maxSpeed>=c||c<=0||epsilon0<=0)throw new RangeError("invalid retarded-field physical constants");if(!Number.isInteger(maxIterations)||maxIterations<1||maxIterations>4096)throw new RangeError("maxIterations must be an integer from 1 to 4096");if(!Number.isFinite(tolerance)||tolerance<=0)throw new RangeError("tolerance must be positive and finite");this.sourceWorldline=sourceWorldline;this.sourceVelocity=sourceVelocity;this.charge=charge;this.maxSpeed=maxSpeed;this.c=c;this.epsilon0=epsilon0;this.maxIterations=maxIterations;this.tolerance=tolerance;}
   retardedTime(event){
-    const parsed=tensorShape(event,"event",{trailingSize:4}),samples=parsed.shape.slice(0,-1).reduce((count,size)=>count*size,1);if(samples*this.maxIterations>MAX_RETARDED_FIELD_BATCH_WORK)throw new RangeError("retarded-time batch exceeds the bounded root-work limit");return mapLastAxis(parsed.value,x=>this._retardedTimeScalar(x));
+    const parsed=tensorShape(event,"event",{trailingSize:4}),samples=parsed.shape.slice(0,-1).reduce((count,size)=>count*size,1);if(samples*(this.maxIterations+3)>MAX_RETARDED_FIELD_BATCH_WORK)throw new RangeError("retarded-time batch exceeds the bounded root-work limit");return mapLastAxis(parsed.value,x=>this._retardedTimeScalar(x));
   }
   _retardedTimeScalar(x){
     const t=x[0]/this.c,position=x.slice(1);if(!Number.isFinite(t))throw new RangeError("observation time is non-finite");
@@ -307,6 +307,9 @@ export class RetardedField {
     const positionScale=Math.max(norm(position),norm(now)),coincident=distance===0||distance<=64*Number.EPSILON*positionScale;
     const span=distance/(this.c-this.maxSpeed)+this.tolerance;
     let lo=t-span,hi=t;if(!Number.isFinite(distance)||!Number.isFinite(positionScale)||!Number.isFinite(lo)||!Number.isFinite(span))throw new RangeError("retarded-time bracket is non-finite");
+    const lowerSource=vector(this.sourceWorldline(lo),3,"source position"),lowerDistance=norm(sub(position,lowerSource)),lowerLightDistance=this.c*(t-lo),lowerResidual=lowerLightDistance-lowerDistance;
+    if(!Number.isFinite(lowerResidual)||!Number.isFinite(lowerDistance)||!Number.isFinite(lowerLightDistance))throw new RangeError("retarded-time bracket residual is non-finite");
+    if(lowerResidual < -64*Number.EPSILON*Math.max(lowerLightDistance,lowerDistance))throw new RangeError("retarded-time bracket does not contain a root; check source motion and maxSpeed");
     for(let i=0;i<this.maxIterations;i++){
       const mid=lo+(hi-lo)/2,source=vector(this.sourceWorldline(mid),3,"source position"),f=this.c*(t-mid)-norm(sub(position,source));
       if(!Number.isFinite(f))throw new RangeError("retarded-time residual is non-finite");
@@ -324,7 +327,7 @@ export class RetardedField {
     throw new RangeError("retarded-time bisection did not converge within maxIterations");
   }
   retardedPotential(event){
-    const parsed=tensorShape(event,"event",{trailingSize:4}),samples=parsed.shape.slice(0,-1).reduce((count,size)=>count*size,1);if(samples*(this.maxIterations+2)>MAX_RETARDED_FIELD_BATCH_WORK)throw new RangeError("retarded-potential batch exceeds the bounded work limit");return mapLastAxis(parsed.value,x=>this._retardedPotentialScalar(x));
+    const parsed=tensorShape(event,"event",{trailingSize:4}),samples=parsed.shape.slice(0,-1).reduce((count,size)=>count*size,1);if(samples*(this.maxIterations+4)>MAX_RETARDED_FIELD_BATCH_WORK)throw new RangeError("retarded-potential batch exceeds the bounded work limit");return mapLastAxis(parsed.value,x=>this._retardedPotentialScalar(x));
   }
   _retardedPotentialScalar(x){
     const tr=this._retardedTimeScalar(x),position=x.slice(1),source=vector(this.sourceWorldline(tr),3,"source position"),velocity=vector(this.sourceVelocity(tr),3,"source velocity"),speed=norm(velocity),radius=norm(sub(position,source));
