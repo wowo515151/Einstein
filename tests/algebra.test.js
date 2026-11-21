@@ -273,6 +273,26 @@ test("bivector contraction and Hodge dual use custom Lorentz metrics",()=>{
   const twice=field.dual(metric).dual(metric).components;
   for(let i=0;i<4;i++)for(let j=0;j<4;j++)assert.ok(Math.abs(twice[i][j]+field.components[i][j])<1e-12);
 });
+test("bivector double dual follows signature for non-diagonal metrics",()=>{
+  const metrics=new Metric4([
+    [[-2,.5,0,0],[.5,2,.25,0],[0,.25,3,0],[0,0,0,4]],
+    [[2,.5,0,0],[.5,2,.25,0],[0,.25,3,0],[0,0,0,4]]
+  ]),field=new Bivector4([[0,1,2,3],[-1,0,4,5],[-2,-4,0,6],[-3,-5,-6,0]]);
+  for(const orientation of [-1,1]){
+    const twice=field.dual(metrics,orientation).dual(metrics,orientation).components;
+    for(let sample=0;sample<2;sample++)for(let i=0;i<4;i++)for(let j=0;j<4;j++)
+      assert.ok(Math.abs(twice[sample][i][j]-(sample===0?-1:1)*field.components[i][j])<1e-12);
+  }
+});
+test("bivector dual and invariants respect a non-orthogonal coordinate shear",()=>{
+  const shears=[-.7,.4],maps=shears.map(a=>[[1,0,0,0],[a,1,0,0],[0,0,1,0],[0,0,0,1]]);
+  const metrics=new Metric4(shears.map(a=>[[-1+a*a,-a,0,0],[-a,1,0,0],[0,0,1,0],[0,0,0,1]]));
+  const field=new Bivector4([[0,1,2,3],[-1,0,4,5],[-2,-4,0,6],[-3,-5,-6,0]]),transformed=field.transform(maps);
+  const actual=transformed.dual(metrics).components,expected=field.dual().transform(maps).components;
+  for(let n=0;n<shears.length;n++)for(let i=0;i<4;i++)for(let j=0;j<4;j++)assert.ok(Math.abs(actual[n][i][j]-expected[n][i][j])<1e-12);
+  const invariants=transformed.invariants(metrics),original=field.invariants();
+  for(let n=0;n<shears.length;n++){assert.ok(Math.abs(invariants.quadratic[n]-original.quadratic)<1e-12);assert.ok(Math.abs(invariants.pseudoscalar[n]-original.pseudoscalar)<1e-12);}
+});
 test("bivector batches broadcast through wedge, contraction, dual, transform, and invariants",()=>{
   const a=new Vector4([[1,0,0,0],[0,1,0,0]]),b=new Vector4([[0,1,0,0],[0,0,1,0]]),field=a.wedge(b);
   assert.equal(field.components.length,2);
