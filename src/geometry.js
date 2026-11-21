@@ -1,6 +1,7 @@
 import {C,vector,matrix,zeros,identity,transpose,mmul,mvec,inverse,determinantRoot,dot,scale,add,sub,minkowskiDot} from "./array.js";
 import {Metric4,LorentzTransform} from "./algebra.js";
 import {Event4,integrateRK4} from "./spacetime.js";
+import {forwardJacobian4} from "./autodiff.js";
 
 function geometryMetric(value){return matrix(value instanceof Metric4?value._checkedComponents().data:value);}
 function differenceStencil(point,axis,step){const plus=point.slice(),minus=point.slice();plus[axis]+=step;minus[axis]-=step;const span=plus[axis]-minus[axis],forward=plus[axis]-point[axis],backward=point[axis]-minus[axis];if(!Number.isFinite(span)||!(forward>0)||!(backward>0))throw new RangeError("finite-difference step must produce distinct finite stencil points");return {plus,minus,span,forward,backward};}
@@ -52,6 +53,9 @@ export class DifferentialOperators4 {
     eachShapeIndex(shape,indices=>{for(let axis=0;axis<4;axis++)setTensorValue(out,[...indices,axis],tensorValue(derivatives[axis],indices));});
     return out;
   }
+  partialForward(fn,x){return this.jacobianForward(fn,x);}
+  jacobianForward(fn,x){return this._mapPoints(x,p=>forwardJacobian4(fn,p).jacobian,(_value,components)=>2*components);}
+  gradientForward(fn,x){return this._mapPoints(x,p=>{const field=forwardJacobian4(fn,p);if(typeof field.value!=="number")throw new TypeError("gradient requires a scalar field");const result=mvec(inverse(this._g(p)),field.jacobian);if(result.some(value=>!Number.isFinite(value)))throw new RangeError("gradient is non-finite");return result;},16);}
   gradient(fn,x){return this._mapPoints(x,p=>{const result=mvec(inverse(this._g(p)),this._partialScalar(fn,p));if(result.some(value=>!Number.isFinite(value)))throw new RangeError("gradient is non-finite");return result;},16);}
   divergence(fn,x){return this._mapPoints(x,p=>{const v=vector(fn(p)),d=this._jacobianScalar(fn,p),gamma=this.connection.christoffel(p);let out=0;for(let a=0;a<4;a++){out+=d[a][a];for(let b=0;b<4;b++)out+=gamma[a][a][b]*v[b];}if(!Number.isFinite(out))throw new RangeError("divergence is non-finite");return out;},128);}
   exteriorDerivative(form,x){return this._mapPoints(x,p=>this._exteriorDerivativeScalar(form,p),(_value,components)=>3*components);}

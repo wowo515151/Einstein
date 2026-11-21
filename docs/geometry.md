@@ -1,6 +1,6 @@
 # Differential Geometry
 
-Pass a metric function `g(x)` returning a nonsingular 4×4 covariant matrix to `DifferentialOperators4`, `Connection4`, or `Curvature4`. `DifferentialOperators4` also accepts a constant 4×4 metric or defaults to Minkowski space. The routines use centered finite differences with configurable positive `step`; they divide by the actual representable distance between stencil points and reject a step that cannot move to distinct finite points on both sides. Scalar derivative samples and results must remain finite, so a stencil that crosses a field's coordinate-domain boundary fails explicitly.
+Pass a metric function `g(x)` returning a nonsingular 4×4 covariant matrix to `DifferentialOperators4`, `Connection4`, or `Curvature4`. `DifferentialOperators4` also accepts a constant 4×4 metric or defaults to Minkowski space. The default derivatives use centered finite differences with configurable positive `step`; they divide by the actual representable distance between stencil points and reject a step that cannot move to distinct finite points on both sides. Scalar derivative samples and results must remain finite, so a stencil that crosses a field's coordinate-domain boundary fails explicitly.
 
 ## Differential operators
 
@@ -11,10 +11,26 @@ Each callback accepts a single four-coordinate array. The position argument `x` 
 | `new DifferentialOperators4(metric,{step})` | An operator set. The metric may be a function, a constant matrix, or omitted for Minkowski; `step` defaults to `1e-5`. |
 | `ops.partial(field,x)`, `ops.jacobian(field,x)` | Derivatives of a scalar or rectangular array-valued field, with a final axis of four coordinate derivatives. Output arrays must be finite, nonempty, acyclic, and rank eight or less, subject to the work and component bounds. |
 | `ops.gradient(scalarField,x)` | A metric-raised four-component gradient. |
+| `ops.partialForward(field,x)`, `ops.jacobianForward(field,x)` | First derivatives using explicit `Dual4` operations, with the same derivative-axis and batch conventions. |
+| `ops.gradientForward(scalarField,x)` | Metric-raised scalar gradient using explicit first-order forward differentiation. |
 | `ops.divergence(vectorField,x)` | The covariant divergence as a number or batch. |
 | `ops.exteriorDerivative(form,x)` | Components of the exterior derivative of a covariant form. |
 | `ops.hodgeDual(twoForm,x)` | Covariant dual two-form components; `x` is required for a position-dependent metric. |
 | `ops.dAlembertian(scalarField,x)` | The scalar covariant wave operator, as a number or batch. |
+
+### Explicit forward differentiation
+
+`forwardJacobian4(field,point)` evaluates one scalar or rectangular field at a four-coordinate point and returns `{value,jacobian}`. The callback receives four immutable `Dual4` values. Use `add`, `subtract`, `multiply`, `divide`, `negate`, `sin`, `cos`, `sinh`, `cosh`, `exp`, `log`, `sqrt`, and `pow` methods to propagate first derivatives; constants may be passed as numbers. A numeric output is treated as a constant. Outputs are bounded to 16,384 scalar components and rank eight; invalid domains and non-finite values or derivatives reject. Implicit numeric coercion, including JavaScript arithmetic and `Math` functions applied directly to a dual value, throws rather than silently discarding derivatives.
+
+```js
+import { DifferentialOperators4 } from "../src/relativity/index.js";
+const ops = new DifferentialOperators4();
+const field = x => x[0].pow(2).add(x[1].sin());
+const gradient = ops.gradientForward(field, [2, 0, 0, 0]);
+// Minkowski raised gradient: [-4, 1, 0, 0]
+```
+
+`partialForward`, `jacobianForward`, and `gradientForward` also accept supported coordinate batches. This is an opt-in first-order API, not a general PyTorch replacement: it does not differentiate ordinary JavaScript callbacks automatically, provide higher derivatives, or supply automatic derivatives to connection, curvature, divergence, or wave-operator calculations. Accessing `.value` explicitly or branching on it can discard derivative information; use such operations only when mathematically appropriate.
 
 ## Connection and curvature
 

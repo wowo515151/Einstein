@@ -7,3 +7,4 @@ export * from "../context.js";
 export * from "../gpu.js";
 export * from "../three-adapter.js";
 export * from "../serialization.js";
+export * from "../autodiff.js";
