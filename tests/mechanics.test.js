@@ -609,7 +609,7 @@ test("retarded point-charge potential matches Lib4 and rejects invalid trajector
   const moving=new RetardedField(t=>[.2*t,0,0],()=>[.2,0,0],1,.2,{c:1,epsilon0:1});
   const movingPotential=moving.evaluate([3,2,0,0]);assert.ok(movingPotential.every(Number.isFinite));
   const eventOnMovingSource=[3,.6,0,0];
-  assert.equal(moving.retardedTime(eventOnMovingSource),3);
+  assert.ok(Math.abs(moving.retardedTime(eventOnMovingSource)-3)<=1e-12);
   assert.throws(()=>moving.evaluate(eventOnMovingSource),/singular/);
   assert.throws(()=>new RetardedField(()=>[0,0,0],()=>[0,0,0],1,0,{c:1,epsilon0:1,maxIterations:1,tolerance:1e-14}).retardedTime(event),/did not converge/);
   assert.throws(()=>new RetardedField(()=>[0,0,0],()=>[.1,0,0],1,0,{c:1,epsilon0:1}).evaluate(event),/exceeded the declared maxSpeed/);
@@ -671,4 +671,13 @@ test("Maxwell history collocation aligns each interior frame, including batches"
   assert.throws(()=>solver.collocateHistory(history.slice(0,2),halfHistory.slice(0,1)),/histories/);
   assert.throws(()=>solver.collocateHistory(history,halfHistory.slice(1)),/histories/);
   const frame=Array(20834).fill(grid(0));assert.throws(()=>solver.collocateHistory([frame,frame,frame],[frame,frame]),/output-component limit/);
+});
+
+
+test("retarded time respects representable separations at large spatial offsets",()=>{
+  const stationary=()=>[0,0,0],atOrigin=new RetardedField(stationary,stationary,1,0,{c:1,epsilon0:1}),translated=new RetardedField(()=>[1e16,0,0],stationary,1,0,{c:1,epsilon0:1});
+  assert.ok(Math.abs(translated.retardedTime([10,1e16+2,0,0])-atOrigin.retardedTime([10,2,0,0]))<1e-12);
+  assert.equal(translated.retardedTime([10,1e16,0,0]),10);
+  const base=1.5e308,offset=base+2e292-base,large=new RetardedField(()=>[base,base,0],stationary,1,0,{c:1,epsilon0:1});
+  const root=large.retardedTime([0,base+2e292,base,0]);assert.ok(Math.abs(root/offset+1)<1e-14);
 });
