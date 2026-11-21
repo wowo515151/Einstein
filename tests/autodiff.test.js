@@ -368,3 +368,10 @@ test("forward RK4 differentiates integration bounds for a nonautonomous equation
   let calls=0;assert.throws(()=>integrateRK4ForwardBounds(()=>{calls++;return [0];},[1],2**53,2**53+4,4),/distinct physical steps/);assert.equal(calls,0);
   assert.throws(()=>integrateRK4ForwardBounds((t,x)=>[x[0].multiply(Math.sin(t))],[1],0,1,4),/implicitly converted/);
 });
+
+
+test("ODE worldline differentiates time bounds for independent batches",()=>{
+  const rhs=(t,x,p)=>[x[0].multiply(t).multiply(p[0]),0,0,0],initial=[[2,0,0,0],[3,0,0,0]],worldline=new ODEWorldline(initial,rhs);
+  const [times,events,jacobians]=worldline.integrateForward([0,1],{steps:64,parameters:[.5],withRespectTo:"bounds"});
+  assert.equal(times.at(-1),1);for(let i=0;i<2;i++){const expected=initial[i][0]*Math.exp(.25);assert.ok(Math.abs(events.at(-1)[i][0]-expected)<1e-8);assert.ok(Math.abs(jacobians.at(-1)[i][0][0])<1e-8);assert.ok(Math.abs(jacobians.at(-1)[i][0][1]-.5*expected)<1e-8);}
+});
