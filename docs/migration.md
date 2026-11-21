@@ -6,7 +6,7 @@ This guide helps translate common calls from the locally inspected Python Lib4 A
 
 Import named exports from `src/relativity/index.js`; see the runnable [examples](examples.md). Use finite JavaScript numbers and rectangular arrays in place of PyTorch tensors. Coordinates are `[ct,x,y,z]`, with signature `(-,+,+,+)`. The default speed of light and permittivity use SI; supply consistent values explicitly for other units. `new RelativityContext({units:"natural",c:1})` provides factories with natural-unit constants. `setUnits` creates a new context; it does not convert previously created values.
 
-Leading array dimensions are supported and broadcast only for operations that document them. Tensor axes have length four; pass `indexTypes` to `Tensor4` when leading batch axes are present. JavaScript arrays are not PyTorch tensors: dtype, device placement, autograd, CUDA, and PyTorch operators are not provided. `toDevice` changes context metadata only. The optional asynchronous [GPU batch APIs](gpu.md) have separate Float32 and CPU-fallback semantics.
+Leading array dimensions are supported and broadcast only for operations that document them. Tensor axes have length four; pass `indexTypes` to `Tensor4` when leading batch axes are present. JavaScript arrays are not PyTorch tensors: dtype, device placement, general PyTorch autograd, CUDA, and PyTorch operators are not provided. Selected field, geometry and ODE operations offer explicit forward differentiation when callbacks use dual-number methods. `toDevice` changes context metadata only. The optional asynchronous [GPU batch APIs](gpu.md) have separate Float32 and CPU-fallback semantics.
 
 ## Names and accessors
 
