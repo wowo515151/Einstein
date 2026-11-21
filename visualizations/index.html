@@ -60,7 +60,7 @@
             <button id="reset-button" type="button">Reset scene</button>
           </div>
           <label class="parameter-control" for="speed-slider"><span>Model parameter</span><output id="speed-output" for="speed-slider">0.60</output></label>
-          <input id="speed-slider" type="range" min="0.05" max="0.95" value="0.6" step="0.01">
+          <input id="speed-slider" type="range" min="0.05" max="0.95" value="0.6" step="0.01" aria-describedby="parameter-hint">
           <p id="parameter-hint" class="hint">Dimensionless speed β = v/c; the value remains below 1.</p>
           <div id="observer-frame-control" class="observer-frame-control" hidden>
             <label class="parameter-control select-control" for="observer-frame">
