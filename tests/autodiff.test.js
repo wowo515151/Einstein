@@ -336,3 +336,11 @@ test("ODE worldline exposes initial-event and parameter sensitivity histories",(
   for(let i=0;i<2;i++){const scalar=new ODEWorldline(initial[0][i],velocity).integrateForward([0,1],{...options,withRespectTo:"parameters"});assert.deepEqual(batch[1].at(-1)[0][i],scalar[1].at(-1));assert.deepEqual(batch[2].at(-1)[0][i],scalar[2].at(-1));}
   let calls=0;const many=Array.from({length:3000},()=>[1,0,0,0]);assert.throws(()=>new ODEWorldline(many,()=>{calls++;return [0,0,0,0];}).integrateForward([0,1]),/component or work limit/);assert.equal(calls,0);
 });
+
+
+test("batched forward worldlines match analytic coupled trajectories and sensitivities",()=>{
+  const rhs=(_t,x)=>[1,x[2],x[1].negate(),0],initial=[[0,1,0,0],[0,2,0,0]],worldline=new ODEWorldline(initial,rhs);
+  const [times,events,jacobians]=worldline.integrateForward([0,Math.PI/2],{steps:64}),last=events.at(-1),J=jacobians.at(-1);
+  assert.equal(times.at(-1),Math.PI/2);
+  for(let i=0;i<2;i++){assert.ok(Math.abs(last[i][0]-Math.PI/2)<1e-12);assert.ok(Math.abs(last[i][1])<1e-8);assert.ok(Math.abs(last[i][2]+initial[i][1])<1e-8);assert.ok(Math.abs(J[i][1][2]-1)<1e-8);assert.ok(Math.abs(J[i][2][1]+1)<1e-8);}
+});
