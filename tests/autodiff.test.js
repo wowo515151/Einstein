@@ -77,3 +77,17 @@ test("forward-mode connections support acceleration and parallel transport",()=>
   assert.throws(()=>new Connection4(metric,{metricDerivative:"invalid"}),/metricDerivative/);
   connection.metricDerivative="invalid";assert.throws(()=>connection.christoffel([0,0,0,0]),/metricDerivative/);
 });
+
+
+test("forward covariant derivatives handle upper and lower indices and batches",()=>{
+  const metric=p=>[[-1,0,0,0],[0,p[0].multiply(.2).exp(),0,0],[0,0,1,0],[0,0,0,1]],connection=new Connection4(metric,{metricDerivative:"forward"});
+  const upper=p=>[0,p[0].multiply(-.1).exp(),0,0],lower=p=>[0,p[0].multiply(.1).exp(),0,0],points=[[0,0,0,0],[1,0,0,0]];
+  const upperResult=connection.covariantDerivativeForward(upper,points,["up"]),lowerResult=connection.covariantDerivativeForward(lower,points,["down"]);
+  for(let i=0;i<points.length;i++){const t=points[i][0];assert.ok(Math.abs(upperResult[i][1][0])<1e-12);assert.ok(Math.abs(upperResult[i][0][1]-.1*Math.exp(.1*t))<1e-12);assert.ok(Math.abs(lowerResult[i][1][0])<1e-12);assert.ok(Math.abs(lowerResult[i][0][1]+.1*Math.exp(.1*t))<1e-12);}
+  assert.deepEqual(connection.covariantDerivativeVectorForward(upper,points),upperResult);
+  const compatibility=connection.covariantDerivativeForward(metric,points,["down","down"]);assert.ok(compatibility.flat(Infinity).every(value=>Math.abs(value)<1e-12));
+  assert.throws(()=>connection.covariantDerivativeForward(p=>p[0].value===0?[0,0,0,0]:[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]],points,["up"]),/shape/);
+  assert.deepEqual(connection.covariantDerivativeForward(p=>p[0].pow(2),[2,0,0,0],[]),[4,0,0,0]);
+  assert.throws(()=>connection.covariantDerivativeForward(upper,points,["up","down"]),/indexTypes length/);
+  assert.throws(()=>connection.covariantDerivativeForward(upper,points,["invalid"]),/indexTypes/);
+});

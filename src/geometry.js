@@ -114,6 +114,32 @@ export class Connection4 {
     return out;
   }
   _christoffelScalar(p){const g=this._g(p),gi=inverse(g),dg=Array.from({length:4},(_,k)=>{const stencil=differenceStencil(p,k,this.step);const a=this._g(stencil.plus),b=this._g(stencil.minus);return a.map((r,i)=>r.map((v,j)=>weightedStencilDerivative(v,b[i][j],g[i][j],stencil)));}),out=zeros(4).map(()=>zeros(4));for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)out[a][b][c]+=.5*gi[a][d]*(dg[b][d][c]+dg[c][d][b]-dg[d][b][c]);if(out.some(plane=>plane.some(row=>row.some(value=>!Number.isFinite(value)))))throw new RangeError("Christoffel symbols are non-finite");return out;}
+  covariantDerivativeVectorForward(field,x){return this.covariantDerivativeForward(field,x,["up"]);}
+  covariantDerivativeForward(field,x,indexTypes=["up"]){
+    if(!Array.isArray(indexTypes)||Array.from(indexTypes).some(type=>type!=="up"&&type!=="down"))throw new TypeError("indexTypes entries must be 'up' or 'down'");
+    if(indexTypes.length>24)throw new RangeError("tensor rank exceeds the covariant derivative index limit");
+    const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),batchCount=batchShape.reduce((count,size)=>count*size,1),firstIndex=Array(batchShape.length).fill(0),firstPoint=geometryBatchGet(parsed.data,batchShape,firstIndex,batchShape),first=forwardJacobian4(field,firstPoint),shape=tensorShape(first.value);
+    if(shape.length!==indexTypes.length)throw new RangeError("indexTypes length must match tensor field rank");
+    const components=shape.reduce((product,length)=>product*length,1);
+    if(batchCount*components*4>MAX_COVARIANT_COMPONENTS)throw new RangeError("covariant derivative exceeds the bounded component limit");
+    const evaluate=(point,differentiated)=>{
+      if(JSON.stringify(tensorShape(differentiated.value))!==JSON.stringify(shape))throw new RangeError("tensor field shape must remain constant across batch samples");
+      const g=this.christoffel(point),out=zeroTensor([...shape,4]);
+      eachIndex(indexTypes.length,slots=>{for(let d=0;d<4;d++){
+        let derivative=tensorValue(differentiated.jacobian,[...slots,d]);
+        for(let axis=0;axis<indexTypes.length;axis++)for(let e=0;e<4;e++){
+          const replaced=slots.slice();replaced[axis]=e;
+          const connection=indexTypes[axis]==="up"?g[slots[axis]][d][e]:g[e][d][slots[axis]];
+          derivative+=(indexTypes[axis]==="up"?1:-1)*connection*tensorValue(differentiated.value,replaced);
+        }
+        if(!Number.isFinite(derivative))throw new RangeError("covariant derivative is non-finite");
+        setTensorValue(out,[...slots,d],derivative);
+      }});
+      return out;
+    };
+    if(!batchShape.length)return evaluate(firstPoint,first);
+    return geometryBuildBatch(batchShape,index=>{const point=geometryBatchGet(parsed.data,batchShape,index,batchShape),value=index.every((part,axis)=>part===firstIndex[axis])?first:forwardJacobian4(field,point);return evaluate(point,value);});
+  }
   covariantDerivativeVector(field,x){return this.covariantDerivative(field,x,["up"]);}
   covariantDerivative(field,x,indexTypes=["up"]){
     if(!Array.isArray(indexTypes)||Array.from(indexTypes).some(type=>type!=="up"&&type!=="down"))throw new TypeError("indexTypes entries must be 'up' or 'down'");
