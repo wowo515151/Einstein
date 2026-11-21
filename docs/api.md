@@ -2,7 +2,7 @@
 
 Import public names from `src/relativity/index.js`. The [examples](examples.md) show executable imports and common operations. These tables guide users to principal methods; follow the topic pages for shapes, conventions, options, numerical limits, and differences from Lib4.
 
-For an index of inspected Lib4 class methods, properties, and selected data fields, see the [Lib4 public API inventory](lib4-method-inventory.md). Other instance fields remain to be audited. The inventory maps API names only; behavioral coverage and intentional differences remain in the [port matrix](port-matrix.md).
+For an index of inspected Lib4 class methods and properties, see the [Lib4 public API inventory](lib4-method-inventory.md). The [instance field map](lib4-fields.md) maps all 70 annotated or constructor-assigned public class/field pairs found in the 28 inspected classes; it excludes dynamically created, inherited, and framework-provided attributes. These inventories map source surfaces, not behavioral parity. Behavioral evidence and intentional differences are recorded in the [port matrix](port-matrix.md).
 
 Coordinates use `[ct,x,y,z]` and the default Minkowski metric has signature `(-,+,+,+)`. Values use plain JavaScript numeric arrays. Many operations support compatible leading batch dimensions, but this is not a general PyTorch replacement; see each topic before relying on broadcasting. Invalid dimensions, non-finite values, singular matrices, superluminal velocities, and invalid causal normalization can throw.
 
