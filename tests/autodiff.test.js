@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Dual4,Jet4,forwardJacobian4,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward,ODEWorldline,integrateRK4ForwardTree,integrateRK4ForwardBounds} from "../src/relativity/index.js";
+import {Dual4,Jet4,forwardJacobian4,forwardJacobian,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward,ODEWorldline,integrateRK4ForwardTree,integrateRK4ForwardBounds} from "../src/relativity/index.js";
 
 const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(3).divide(x[3].pow(2).add(1)));
 function expected([t,x,y,z]){const denominator=1+z*z;return [Math.cos(t)*Math.exp(x),Math.sin(t)*Math.exp(x),3*y*y/denominator,-2*z*y**3/denominator**2];}
@@ -374,4 +374,14 @@ test("ODE worldline differentiates time bounds for independent batches",()=>{
   const rhs=(t,x,p)=>[x[0].multiply(t).multiply(p[0]),0,0,0],initial=[[2,0,0,0],[3,0,0,0]],worldline=new ODEWorldline(initial,rhs);
   const [times,events,jacobians]=worldline.integrateForward([0,1],{steps:64,parameters:[.5],withRespectTo:"bounds"});
   assert.equal(times.at(-1),1);for(let i=0;i<2;i++){const expected=initial[i][0]*Math.exp(.25);assert.ok(Math.abs(events.at(-1)[i][0]-expected)<1e-8);assert.ok(Math.abs(jacobians.at(-1)[i][0][0])<1e-8);assert.ok(Math.abs(jacobians.at(-1)[i][0][1]-.5*expected)<1e-8);}
+});
+
+
+test("forward Jacobian differentiates rectangular fields beyond four inputs",()=>{
+  const point=[2,.3,0,0,0,3],result=forwardJacobian(x=>[[x[0].multiply(x[5]),x[1].sin()],[4,x[5].pow(2)]],point);
+  assert.deepEqual(result.value,[[6,Math.sin(.3)],[4,9]]);assert.deepEqual(result.jacobian[0][0],[3,0,0,0,0,2]);assert.ok(Math.abs(result.jacobian[0][1][1]-Math.cos(.3))<1e-15);assert.deepEqual(result.jacobian[1][1],[0,0,0,0,0,6]);
+  assert.deepEqual(forwardJacobian(x=>x[0].pow(2),[3]),{value:9,jacobian:[6]});
+  let calls=0;assert.throws(()=>forwardJacobian(()=>++calls,point),/consistent/);
+  const cycle=[];cycle.push(cycle);assert.throws(()=>forwardJacobian(()=>cycle,[1]),/cycles/);
+  assert.throws(()=>forwardJacobian(()=>Array(32769).fill(0),[1]),/component limit/);
 });

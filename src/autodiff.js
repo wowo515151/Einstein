@@ -58,6 +58,31 @@ export function forwardJacobian4(field,point){
 }
 
 
+/** Differentiate a scalar or rectangular output with respect to up to 32 inputs. */
+export function forwardJacobian(field,point){
+  if(typeof field!=="function")throw new TypeError("field must be a function");
+  if((!Array.isArray(point)&&!(ArrayBuffer.isView(point)&&!(point instanceof DataView)))||point.length<1||point.length>32)throw new RangeError("point must contain from 1 to 32 coordinates");
+  const input=Array.from(point,value=>finite(value,"point coordinate")),n=input.length,limit=Math.floor(65536/(n+1));let shape,values,jacobian;
+  for(let first=0;first<n;first+=4){
+    const variables=input.map((value,i)=>i>=first&&i<first+4?Dual4.variable(value,i-first):Dual4.constant(value)),output=field(variables),active=new Set(),leaves=[];
+    function inspect(node,depth){
+      if(node instanceof Dual4||typeof node==="number"){if(leaves.length>=limit)throw new RangeError("forward field output exceeds the component limit");leaves.push(asDual(node));return [];}
+      if(!Array.isArray(node)||node.length===0)throw new TypeError("forward field output must be a nonempty rectangular array or scalar");
+      if(depth>=8)throw new RangeError("forward field output rank exceeds eight");
+      if(node.length>limit)throw new RangeError("forward field output exceeds the component limit");
+      if(active.has(node))throw new RangeError("forward field output cannot contain cycles");
+      active.add(node);try{const childShapes=Array.from(node,child=>inspect(child,depth+1)),childShape=childShapes[0];if(childShapes.some(child=>JSON.stringify(child)!==JSON.stringify(childShape)))throw new RangeError("forward field output must be rectangular");return [node.length,...childShape];}finally{active.delete(node);}
+    }
+    const outputShape=inspect(output,0),sample=leaves.map(leaf=>leaf.value);
+    if(!shape){shape=outputShape;values=sample;jacobian=leaves.map(()=>Array(n).fill(0));}
+    else if(JSON.stringify(outputShape)!==JSON.stringify(shape)||sample.some((value,i)=>!Object.is(value,values[i])))throw new RangeError("forward field output must remain consistent across sensitivity evaluations");
+    for(let row=0;row<leaves.length;row++)for(let lane=0;lane<4&&first+lane<n;lane++)jacobian[row][first+lane]=leaves[row].derivatives[lane];
+  }
+  const rebuild=leaves=>{let i=0;const visit=depth=>depth===shape.length?leaves[i++]:Array.from({length:shape[depth]},()=>visit(depth+1));return visit(0);};
+  return {value:rebuild(values),jacobian:rebuild(jacobian)};
+}
+
+
 function asJet(value){return value instanceof Jet4?value:Jet4.constant(value);}
 
 /** A scalar value with four first derivatives and a 4×4 Hessian. */
