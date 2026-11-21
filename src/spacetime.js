@@ -199,6 +199,21 @@ export function integrateRK4Forward(rhs,initialState,start,end,steps,{parameters
   return rows.map(([parameter,state])=>({parameter,value:state.slice(0,n),jacobian:Array.from({length:n},(_,i)=>state.slice(n+i*columns,n+(i+1)*columns))}));
 }
 
+/** Propagate sensitivities for a bounded rectangular scalar or array state. */
+export function integrateRK4ForwardTree(rhs,initialState,start,end,steps,options={}){
+  if(typeof rhs!=="function")throw new TypeError("rhs must be a function");
+  const parsed=parseNumericTree(initialState,"initialState"),shape=parsed.shape,initial=[];
+  const flattenInitial=node=>{if(Array.isArray(node))for(const child of node)flattenInitial(child);else initial.push(node);};flattenInitial(parsed.data);
+  if(initial.length>32)throw new RangeError("forward state exceeds the 32-component limit");
+  const rebuild=values=>{let i=0;const visit=depth=>depth===shape.length?values[i++]:Array.from({length:shape[depth]},()=>visit(depth+1));return visit(0);};
+  const flattenOutput=node=>{const out=[];const visit=(value,depth)=>{
+    if(depth===shape.length){if(Array.isArray(value)||ArrayBuffer.isView(value))throw new RangeError("rhs result shape must match the integration state");out.push(value);return;}
+    if(!Array.isArray(value)||value.length!==shape[depth])throw new RangeError("rhs result shape must match the integration state");
+    for(const child of value)visit(child,depth+1);
+  };visit(node,0);return out;};
+  return integrateRK4Forward((time,values,parameters)=>flattenOutput(rhs(time,rebuild(values),parameters)),initial,start,end,steps,options).map(row=>({...row,value:rebuild(row.value)}));
+}
+
 /** Integrate a dual-compatible four-state ODE and its initial-state Jacobian. */
 export function integrateRK4Forward4(rhs,initialState,start,end,steps){
   if(typeof rhs!=="function")throw new TypeError("rhs must be a function");

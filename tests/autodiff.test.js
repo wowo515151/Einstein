@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Dual4,Jet4,forwardJacobian4,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward,ODEWorldline} from "../src/relativity/index.js";
+import {Dual4,Jet4,forwardJacobian4,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward,ODEWorldline,integrateRK4ForwardTree} from "../src/relativity/index.js";
 
 const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(3).divide(x[3].pow(2).add(1)));
 function expected([t,x,y,z]){const denominator=1+z*z;return [Math.cos(t)*Math.exp(x),Math.sin(t)*Math.exp(x),3*y*y/denominator,-2*z*y**3/denominator**2];}
@@ -343,4 +343,15 @@ test("batched forward worldlines match analytic coupled trajectories and sensiti
   const [times,events,jacobians]=worldline.integrateForward([0,Math.PI/2],{steps:64}),last=events.at(-1),J=jacobians.at(-1);
   assert.equal(times.at(-1),Math.PI/2);
   for(let i=0;i<2;i++){assert.ok(Math.abs(last[i][0]-Math.PI/2)<1e-12);assert.ok(Math.abs(last[i][1])<1e-8);assert.ok(Math.abs(last[i][2]+initial[i][1])<1e-8);assert.ok(Math.abs(J[i][1][2]-1)<1e-8);assert.ok(Math.abs(J[i][2][1]+1)<1e-8);}
+});
+
+
+test("forward RK4 preserves rectangular states and flattens Jacobian axes",()=>{
+  const rhs=(_t,x)=>[[x[1][0],0],[x[0][0].negate(),0]],last=integrateRK4ForwardTree(rhs,[[1,2],[3,4]],0,Math.PI/2,128).at(-1);
+  assert.ok(Math.abs(last.value[0][0]-3)<1e-8);assert.ok(Math.abs(last.value[1][0]+1)<1e-8);assert.equal(last.value[0][1],2);assert.equal(last.value[1][1],4);
+  assert.ok(Math.abs(last.jacobian[0][2]-1)<1e-8);assert.ok(Math.abs(last.jacobian[2][0]+1)<1e-8);
+  const scalar=integrateRK4ForwardTree((_t,x)=>x,2,0,1,64).at(-1);assert.ok(Math.abs(scalar.value-2*Math.E)<1e-7);assert.ok(Math.abs(scalar.jacobian[0][0]-Math.E)<1e-7);
+  const parameter=integrateRK4ForwardTree((_t,x,p)=>[[x[0][0].multiply(p[0]),0]],[[2,1]],0,1,64,{parameters:[.3],withRespectTo:"parameters"}).at(-1);assert.ok(Math.abs(parameter.jacobian[0][0]-2*Math.exp(.3))<1e-8);
+  assert.throws(()=>integrateRK4ForwardTree(()=>[[1,2,3],[4,5,6]],[[1,2],[3,4]],0,1,2),/shape/);
+  assert.throws(()=>integrateRK4ForwardTree(()=>0,Array(33).fill(0),0,1,2),/32-component/);
 });
