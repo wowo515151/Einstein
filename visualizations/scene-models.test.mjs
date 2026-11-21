@@ -470,3 +470,9 @@ test("input validation rejects superluminal speeds and unknown scenes", () => {
   assert.throws(() => buildSceneData("minkowski", { time: Number.NaN }), /time must be finite/);
   assert.throws(() => buildSceneData("not-a-scene"), /Unknown scene/);
 });
+
+
+test("twin worldline samples carry physical event and clock values",()=>{
+  const beta=.6,rows=buildSceneData("twins",{beta,time:1});
+  for(const row of rows){const ct=row.ct,expectedX=row.label.startsWith("stay-home")?0:(ct<=2?beta*ct:beta*(4-ct));assert.ok(Math.abs(row.worldlineX-expectedX)<1e-14);assert.ok(Math.abs(row.properTime-ct*(row.label.startsWith("stay-home")?1:.8))<1e-14);}
+});

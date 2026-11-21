@@ -198,13 +198,13 @@ function scenePoints(sceneId, time, beta, observerFrame = "lab") {
     }));
   }
   if (sceneId === "twins") {
-    const count = 140;
+    const count = 140, travelerRate = new SpacetimeInterval([1,beta,0,0], {c:1}).properTime();
     return Array.from({ length: count * 2 }, (_, index) => {
       const observer = index < count ? "stay-home" : "traveler";
       const sample = index % count;
       const t = sample / (count - 1) * 4;
       const x = observer === "stay-home" ? 0 : (t <= 2 ? beta * t : beta * (4 - t));
-      return point(`${observer}-${sample}`, x - 2 * beta, t - 2, ((observer === "stay-home" ? -1 : 1) * twinDisplayDepth(t)) || 0, `${observer} clock`);
+      return {...point(`${observer}-${sample}`, x - 2 * beta, t - 2, ((observer === "stay-home" ? -1 : 1) * twinDisplayDepth(t)) || 0, `${observer} clock`),ct:t,worldlineX:x,properTime:observer === "stay-home" ? t : t * travelerRate};
     });
   }
   if (sceneId === "aberration") {

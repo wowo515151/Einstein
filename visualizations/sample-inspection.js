@@ -2,7 +2,13 @@
 export function describeSample(rows, number) {
   if (!Number.isInteger(number) || number < 1 || number > rows.length) throw new RangeError(`Choose a sample from 1 to ${rows.length}.`);
   const row = rows[number-1];
-  return `Selected sample ${number} of ${rows.length}: ${String(row.label ?? row.id)}. Display coordinates: (${row.x.toFixed(3)}, ${row.y.toFixed(3)}, ${row.z.toFixed(3)}).`;
+  const details=[];
+  if(Number.isFinite(row.ct))details.push(`Coordinate time ct: ${row.ct.toFixed(3)}`);
+  if(Number.isFinite(row.worldlineX))details.push(`Worldline x: ${row.worldlineX.toFixed(3)}`);
+  if(Number.isFinite(row.properTime))details.push(`Clock proper time: ${row.properTime.toFixed(3)}`);
+  if(Number.isFinite(row.metricNorm))details.push(`Metric tangent norm: ${row.metricNorm.toExponential(3)}`);
+  const suffix=details.length?` ${details.join(". ")}.`:"";
+  return `Selected sample ${number} of ${rows.length}: ${String(row.label ?? row.id)}. Display coordinates: (${row.x.toFixed(3)}, ${row.y.toFixed(3)}, ${row.z.toFixed(3)}).${suffix}`;
 }
 
 /** Describe a point retained on screen after its replacement data failed to render. */
