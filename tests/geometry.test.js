@@ -291,6 +291,18 @@ test("geodesic boundary shooting uses damped least squares and returns a matchin
   assert.throws(()=>geo.solveBoundary([2,1,0,0],[0,2],{steps:2000,maxIterations:1}),/bounded integration-step limit/);
   assert.throws(()=>geo.solveBoundary([2,1,0,0],[0,2],{damping:0}),/damping must be positive/);
 });
+test("geodesic boundary defaults use the Lib4 tolerance and permit its iteration budget",()=>{
+  const connection={geodesicAcceleration:()=>[0,0,0,0]},target=[1,0,0,0];
+  const near=new Geodesic4(connection,[0,0,0,0],[1-5e-8,0,0,0]);
+  assert.throws(()=>near.solveBoundary(target,[0,1],{steps:1,maxIterations:0}),/did not converge/);
+  assert.equal(near.solveBoundary(target,[0,1],{steps:1,maxIterations:0,tolerance:1e-7}).length,2);
+  const exact=new Geodesic4(connection,[0,0,0,0],[1,0,0,0]);
+  assert.equal(exact.solveBoundary(target,[0,1],{steps:100,maxIterations:12}).length,101);
+  const damped=new Geodesic4(connection,[0,0,0,0],[0,0,0,0]);
+  assert.throws(()=>damped.solveBoundary(target,[0,1],{steps:1,maxIterations:8,damping:.1}),/did not converge/);
+  const solved=damped.solveBoundary(target,[0,1],{steps:1,damping:.1});
+  assert.ok(Math.abs(solved.at(-1).event.position[0]-1)<1e-9);
+});
 
 test("boundary shooting reuses perturbed trajectories across Jacobian rows",()=>{
   let calls=0;
