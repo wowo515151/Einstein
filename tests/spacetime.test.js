@@ -137,6 +137,17 @@ test("cone detects reshaped mutable apex without rejecting coordinate edits",()=
   for(const operation of [()=>cone.onSurface([0,0,0,0]),()=>cone.contains([0,0,0,0]),()=>cone.sample([1,0,0],1),()=>cone.intersectWorldline([0,0,0,0],[1,0,0,0]),()=>cone.intersectHypersurface([1,0,0,0],1,[1,0,0]),()=>slice.intersectLightcone(cone)])
     assert.throws(operation,/cone apex batch shape changed/);
 });
+test("batched ODE worldlines follow analytic state-dependent laws forward and backward",()=>{
+  const initial=[[1,2,-1,.5],[2,-1,.25,3]],rates=[.7,-.4],velocity=(t,state)=>state.map((row,n)=>row.map(value=>rates[n]*t*value));
+  const [times,events]=new ODEWorldline(initial,velocity).integrate([0,1],{steps:40});
+  assert.equal(times.length,41);assert.equal(events.length,41);
+  for(let i=0;i<times.length;i++)for(let n=0;n<2;n++)for(let k=0;k<4;k++)
+    assert.ok(Math.abs(events[i][n][k]-initial[n][k]*Math.exp(rates[n]*times[i]**2/2))<1e-9);
+  const end=initial.map((row,n)=>row.map(value=>value*Math.exp(rates[n]/2)));
+  const [reverseTimes,reverseEvents]=new ODEWorldline(end,velocity).integrate([1,0],{steps:40});
+  assert.equal(reverseTimes.at(-1),0);
+  for(let n=0;n<2;n++)for(let k=0;k<4;k++)assert.ok(Math.abs(reverseEvents.at(-1)[n][k]-initial[n][k])<1e-9);
+});
 test("spacetime intervals use scale-aware tolerance and event constants propagate",()=>{
   const origin=new Event4([0,0,0,0],null,2),timelike=new Event4([2,0,0,0],null,2),interval=origin.intervalTo(timelike);
   assert.deepEqual(origin.displacementTo(timelike),[2,0,0,0]);assert.throws(()=>origin.displacementTo([2,0,0,0]),TypeError);
