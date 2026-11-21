@@ -12,6 +12,14 @@ test("algebra inputs reject sparse components and sparse batches",()=>{
   assert.throws(()=>minkowskiDot(vector,[1,0,0,0]),/finite/);
   assert.throws(()=>minkowskiDot(batch,[1,0,0,0]),/finite/);
 });
+
+test("identity and Minkowski factories preflight sparse batch shapes",()=>{
+  const sparse=[62500,1,2];delete sparse[1];
+  for(const factory of [options=>Matrix4.identity(options),options=>Metric4.minkowski(options),options=>LorentzTransform.identity(options),options=>PoincareTransform.identity(options)]){
+    assert.throws(()=>factory({batchShape:sparse}),/batchShape/);
+    assert.doesNotThrow(()=>factory({batchShape:[2,1]}));
+  }
+});
 test("broadcast algebra rejects oversized outputs before allocation",()=>{
   const column=Array.from({length:1001},()=>[[1,0,0,0]]);
   const row=[Array.from({length:1001},()=>[1,0,0,0])];
@@ -488,6 +496,13 @@ test("Tensor4 rank is read-only and follows its index types",()=>{
   const tensor=new Tensor4([[1,0,0,0],[0,2,0,0],[0,0,3,0],[0,0,0,4]],["up","down"]);
   assert.equal(tensor.rank,2);assert.throws(()=>{tensor.rank=9;},TypeError);
   assert.equal(tensor.rank,2);assert.equal(tensor.contract(0,1),10);
+});
+
+test("tensor symmetrization avoids overflowing representable averages",()=>{
+  const matrix=[[1e308,1e308,0,0],[-1e308,-1e308,0,0],[0,0,0,0],[0,0,0,0]];
+  const tensor=new Tensor4(matrix,["down","down"]),symmetric=tensor.symmetrize().components,antisymmetric=tensor.antisymmetrize().components;
+  assert.equal(symmetric[0][0],1e308);assert.equal(symmetric[1][1],-1e308);assert.equal(symmetric[0][1],0);
+  assert.equal(antisymmetric[0][1],1e308);assert.equal(antisymmetric[1][0],-1e308);
 });
 test("Levi-Civita orientation and tensor shape validation",()=>{
   const epsilon=new LeviCivita4().epsilon("down"),reversed=new LeviCivita4(undefined,-1).epsilon("down");

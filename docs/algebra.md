@@ -40,6 +40,8 @@ Construct with four finite components `(ct,x,y,z)` or a rectangular batch ending
 
 `Tensor4.rank` is a read-only property derived from `indexTypes`, matching Lib4's rank property.
 
+Symmetrization and antisymmetrization halve terms separately when their intermediate sum overflows, preserving representable averages for some large finite components.
+
 | Call | Returns |
 | --- | --- |
 | `new Matrix4(components)`, `Matrix4.identity({batchShape})` | A matrix value; the optional batch shape creates repeated identities. |
