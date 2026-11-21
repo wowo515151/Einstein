@@ -86,6 +86,44 @@ test("Lib4 frozen spacetime value objects reject reassignment",()=>{
   ];
   for(const [value,field] of cases){assert.ok(Object.isFrozen(value));assert.equal(Reflect.set(value,field,"changed"),false);}
 });
+test("slice and cone protect cached batch shapes from mutation",()=>{
+  const origins=[[0,0,0,0],[1,0,0,0]],slice=new SpatialSlice(origins,[1,0,0,0]),cone=new LightCone(origins);
+  assert.deepEqual(slice.batchShape,[2]);assert.deepEqual(cone.apexBatchShape,[2]);
+  assert.throws(()=>{slice.batchShape[0]=100;},TypeError);
+  assert.throws(()=>cone.apexBatchShape.push(2),TypeError);
+  assert.deepEqual(slice.contains(origins),[true,true]);
+  assert.deepEqual(cone.onSurface(origins),[true,true]);
+});
+test("slice detects reshaped mutable components before using cached dimensions",()=>{
+  const slice=new SpatialSlice([[0,0,0,0],[1,0,0,0]],[1,0,0,0]);
+  slice.originPosition[0][0]=2;
+  assert.deepEqual(slice.embed3D([0,0,0]).position,[[2,0,0,0],[1,0,0,0]]);
+  for(const field of ["originPosition","normal","basis"]){
+    const value=new SpatialSlice([[0,0,0,0],[1,0,0,0]],[1,0,0,0]);
+    value[field].push(structuredClone(value[field][0]));
+    const cone=new LightCone([0,0,0,0],{branch:"future"});
+    for(const operation of [()=>value.projectTo3D([0,0,0,0]),()=>value.embed3D([0,0,0]),()=>value.contains([0,0,0,0]),()=>value._d([0,0,0,0]),()=>value.intersectWorldline([0,0,0,0],[1,0,0,0]),()=>value.intersectLightcone(cone)])
+      assert.throws(operation,/batch shape changed/);
+  }
+});
+test("slice rejects same-shape changes that break normal or basis invariants",()=>{
+  for(const mutate of [s=>{s.normal[0]=2;},s=>{s.normal[0]=-1;},s=>{s.basis[0][1]=2;},s=>{s.basis[0][0]=1;}]){
+    const slice=new SpatialSlice([0,0,0,0],[1,0,0,0]);mutate(slice);
+    assert.throws(()=>slice.projectTo3D([0,1,0,0]),/slice (normal|basis) must remain/);
+    assert.throws(()=>slice.embed3D([1,0,0]),/slice (normal|basis) must remain/);
+  }
+  const slice=new SpatialSlice([0,0,0,0],[1,0,0,0]);slice.basis[0][1]=-1;
+  assert.deepEqual(slice.projectTo3D(slice.embed3D([1,0,0])),[1,0,0]);
+});
+test("cone detects reshaped mutable apex without rejecting coordinate edits",()=>{
+  const apex=new Event4([[0,0,0,0],[1,0,0,0]]),cone=new LightCone(apex,{branch:"future"});
+  apex.position[0][0]=2;
+  assert.deepEqual(cone.sample([1,0,0],1),[[3,1,0,0],[2,1,0,0]]);
+  apex.position.push([2,0,0,0]);
+  const slice=new SpatialSlice([0,0,0,0],[1,0,0,0]);
+  for(const operation of [()=>cone.onSurface([0,0,0,0]),()=>cone.contains([0,0,0,0]),()=>cone.sample([1,0,0],1),()=>cone.intersectWorldline([0,0,0,0],[1,0,0,0]),()=>cone.intersectHypersurface([1,0,0,0],1,[1,0,0]),()=>slice.intersectLightcone(cone)])
+    assert.throws(operation,/cone apex batch shape changed/);
+});
 test("spacetime intervals use scale-aware tolerance and event constants propagate",()=>{
   const origin=new Event4([0,0,0,0],null,2),timelike=new Event4([2,0,0,0],null,2),interval=origin.intervalTo(timelike);
   assert.deepEqual(origin.displacementTo(timelike),[2,0,0,0]);assert.throws(()=>origin.displacementTo([2,0,0,0]),TypeError);

@@ -54,6 +54,8 @@ Interval, event and light-cone surface/containment classification apply the tole
 
 The scale-aware tolerance uses coordinate components, whose Euclidean magnitude changes under Lorentz boosts. Consequently, classifications close to the tolerance boundary can differ between frames even though the exact interval is invariant. Use an appropriate tolerance and inspect the squared interval for sensitive cases.
 
+`SpatialSlice.batchShape` and `LightCone.apexBatchShape` are frozen cached metadata. Component arrays remain shallowly mutable as described in the API conventions. Cone apex coordinate values may change, but its batch dimensions must stay the same; reconstruct the cone after reshaping the apex. Slice origin, normal, and basis arrays must likewise retain their constructed batch dimensions; reconstruct the slice after reshaping them. The normal must remain future-directed and normalized, and the basis must remain orthonormal and orthogonal to it.
+
 Slice–cone intersections use a scaled branch tolerance and reject non-finite final classification or hit-center values. A branch miss retains the documented `hit: false` and NaN center/radius representation.
 
 Light-cone worldline intersections scale the quadratic coefficients before solving, allowing some large finite intersections that previously overflowed. With zero tolerance, tiny nonzero offsets and directions are scaled as well; with nonzero tolerance, extremely small direction scales can still underflow and are rejected. Events are constructed from the scaled roots without forming the affine parameter, which can recover representable events even when that parameter is outside the Float64 range. Near-degenerate roots and event construction remain subject to floating-point limits.
