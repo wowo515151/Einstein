@@ -21,10 +21,10 @@ Each callback accepts a single four-coordinate array. The position argument `x` 
 | Call | Returns |
 | --- | --- |
 | `new Connection4(metric,{step})` | A connection for a metric callback and optional positive finite-difference step. |
-| `connection.christoffel(x)` | Christoffel components with shape `(...,4,4,4)`. |
-| `connection.covariantDerivative(field,x,indexTypes)` | Field components with a final derivative axis; `indexTypes` defaults to `["up"]` and can be `[]` for a scalar. |
+| `connection.christoffel(x)` | Christoffel components with shape `(...,4,4,4)`; non-finite results reject. |
+| `connection.covariantDerivative(field,x,indexTypes)` | Field components with a final derivative axis; `indexTypes` defaults to `["up"]` and can be `[]` for a scalar. Every tensor slot must have an explicit `"up"` or `"down"` entry. Non-finite corrected derivatives reject. |
 | `connection.covariantDerivativeVector(field,x)` | The vector convenience form of the covariant derivative. |
-| `connection.geodesicAcceleration(x,tangent)` | Four acceleration components, broadcasting compatible positions and tangents. |
+| `connection.geodesicAcceleration(x,tangent)` | Four acceleration components, broadcasting compatible positions and tangents; non-finite results reject. |
 | `connection.parallelTransport(vector,path,{stepsPerSegment})` | Transported vector components at each supplied path point; the default is eight RK4 steps per segment. |
 | `new Curvature4(metric,{step})` | Curvature calculations for a metric callback and optional finite-difference step. |
 | `curvature.riemann(x)`, `curvature.ricci(x)` | Riemann `(...,4,4,4,4)` or Ricci `(...,4,4)` components. |

@@ -195,6 +195,12 @@ test("Christoffel symbols preserve lower-index symmetry for off-diagonal metric 
   for(const [a,b,c,expected] of [[0,1,2,-.5],[1,0,2,.5],[2,0,1,-.5]])assert.ok(Math.abs(gamma[a][b][c]-expected)<1e-9);
   for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)assert.ok(Math.abs(gamma[a][b][c]-gamma[a][c][b])<1e-12);
 });
+test("connection and geodesic acceleration reject non-finite results",()=>{
+  const steep=x=>[[-1,0,0,0],[0,1e-308+4*x[0],0,0],[0,0,1,0],[0,0,0,1]];
+  assert.throws(()=>new Connection4(steep).christoffel([0,0,0,0]),/Christoffel symbols are non-finite/);
+  const metric=x=>[[-1,0,0,0],[0,Math.exp(4*x[0]),0,0],[0,0,1,0],[0,0,0,1]],connection=new Connection4(metric);
+  assert.throws(()=>connection.geodesicAcceleration([0,0,0,0],[1e200,1e200,0,0]),/geodesic acceleration is non-finite/);
+});
 test("Christoffel symbols preserve leading point batches within the output bound",()=>{
   const metric=x=>[[-1,0,0,0],[0,Math.exp(2*x[0]),0,0],[0,0,1,0],[0,0,0,1]],connection=new Connection4(metric,{step:1e-4}),positions=[[0,0,0,0],[.2,0,0,0]],batch=connection.christoffel(positions);
   assert.deepEqual(batch,positions.map(point=>connection.christoffel(point)));
@@ -232,6 +238,17 @@ test("covariant derivative supports scalar, vector, covector, and mixed tensor f
   for(const [field,types] of [[scalarField,[]],[vectorField,["up"]],[covectorField,["down"]],[tensorField,["up","down"]]])assert.deepEqual(curvedConnection.covariantDerivative(field,positions,types),positions.map(point=>curvedConnection.covariantDerivative(field,point,types)));
   assert.throws(()=>curvedConnection.covariantDerivative(vectorField,Array.from({length:5000},()=>[0,0,0,0]),["up"]),/bounded component limit/);
 });
+test("covariant derivative rejects missing index variance before evaluating the field",()=>{
+  let calls=0;const field=()=>{calls++;return [1,0,0,0];};
+  assert.throws(()=>new Connection4(flat).covariantDerivative(field,[0,0,0,0],new Array(1)),/indexTypes/);
+  assert.equal(calls,0);
+});
+test("covariant derivative rejects non-finite connection corrections",()=>{
+  const metric=x=>[[-1,0,0,0],[0,Math.exp(4*x[0]),0,0],[0,0,1,0],[0,0,0,1]],connection=new Connection4(metric);
+  const field=()=>[0,1e308,0,0];
+  assert.throws(()=>connection.covariantDerivativeVector(field,[0,0,0,0]),/covariant derivative is non-finite/);
+  assert.throws(()=>connection.covariantDerivative(field,[[0,0,0,0],[.1,0,0,0]],["up"]),/covariant derivative is non-finite/);
+});
 test("parallel transport uses RK4 and returns the value at every path point",()=>{
   const flatValues=new Connection4(flat).parallelTransport([1,2,3,4],[[0,0,0,0],[1,0,0,0],[2,0,0,0]]);
   assert.deepEqual(flatValues,[[1,2,3,4],[1,2,3,4],[1,2,3,4]]);
@@ -245,11 +262,23 @@ test("parallel transport uses RK4 and returns the value at every path point",()=
     batched[sample].forEach((transported,index)=>transported.forEach((component,axis)=>assert.ok(Math.abs(component-scalar[index][axis])<1e-12)));
   }
   assert.throws(()=>new Connection4(metric).parallelTransport([[1,0,0,0],[0,1,0,0],[0,0,1,0]],batchPaths),/broadcast-compatible/);
+  assert.throws(()=>new Connection4(flat).parallelTransport([1,0,0,0],[0,0,0,0]),/at least two coordinate points/);
   const longPath=new Array(1252).fill([0,0,0,0]);
   assert.throws(()=>new Connection4(flat).parallelTransport([1,0,0,0],longPath),RangeError);
   const geo=new Geodesic4(new Connection4(flat),[0,0,0,0],[1,0,0,0]);
   assert.throws(()=>geo.solveBoundary([1,0,0,0],[0,1],{iterations:13}),RangeError);
   assert.throws(()=>geo.solveBoundary([1,0,0,0],[0,1],{steps:2001}),RangeError);
+});
+test("curved parallel transport preserves the metric norm and reverses along the path",()=>{
+  const metric=x=>[[-1,0,0,0],[0,(1+x[0])**2,0,0],[0,0,1,0],[0,0,0,1]],connection=new Connection4(metric);
+  const path=[[0,0,0,0],[.5,0,0,0],[1,0,0,0]],initial=[1,2,.5,0];
+  const values=connection.parallelTransport(initial,path,{stepsPerSegment:20});
+  for(let i=0;i<path.length;i++){
+    assert.ok(Math.abs(values[i][1]-2/(1+path[i][0]))<1e-7);
+    assert.ok(Math.abs(new Metric4(metric(path[i])).dot(values[i],values[i])-3.25)<1e-6);
+  }
+  const reversed=connection.parallelTransport(values.at(-1),path.slice().reverse(),{stepsPerSegment:20}).at(-1);
+  reversed.forEach((value,i)=>assert.ok(Math.abs(value-initial[i])<1e-6));
 });
 test("geodesic boundary shooting uses damped least squares and returns a matching endpoint",()=>{
   const geo=new Geodesic4(new Connection4(flat),[0,0,0,0],[.5,.25,0,0]);

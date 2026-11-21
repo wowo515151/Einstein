@@ -90,10 +90,10 @@ export class Connection4 {
   constructor(metric,{step=1e-5}={}){this.metric=metric;this.step=validateDifferenceStep(step);}
   _g(x){const g=this.metric(x);return g instanceof Metric4?g.components:matrix(g);}
   christoffel(x){const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),components=batchShape.reduce((count,size)=>count*size,1)*64;if(components>MAX_COVARIANT_COMPONENTS)throw new RangeError("Christoffel batch exceeds the component limit");return geometryBuildBatch(batchShape,index=>this._christoffelScalar(geometryBatchGet(parsed.data,batchShape,index,batchShape)));}
-  _christoffelScalar(p){const g=this._g(p),gi=inverse(g),dg=Array.from({length:4},(_,k)=>{const {plus:xp,minus:xm,span}=differenceStencil(p,k,this.step);const a=this._g(xp),b=this._g(xm);return a.map((r,i)=>r.map((v,j)=>differenceQuotient(v,b[i][j],span)));}),out=zeros(4).map(()=>zeros(4));for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)out[a][b][c]+=.5*gi[a][d]*(dg[b][d][c]+dg[c][d][b]-dg[d][b][c]);return out;}
+  _christoffelScalar(p){const g=this._g(p),gi=inverse(g),dg=Array.from({length:4},(_,k)=>{const {plus:xp,minus:xm,span}=differenceStencil(p,k,this.step);const a=this._g(xp),b=this._g(xm);return a.map((r,i)=>r.map((v,j)=>differenceQuotient(v,b[i][j],span)));}),out=zeros(4).map(()=>zeros(4));for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)out[a][b][c]+=.5*gi[a][d]*(dg[b][d][c]+dg[c][d][b]-dg[d][b][c]);if(out.some(plane=>plane.some(row=>row.some(value=>!Number.isFinite(value)))))throw new RangeError("Christoffel symbols are non-finite");return out;}
   covariantDerivativeVector(field,x){return this.covariantDerivative(field,x,["up"]);}
   covariantDerivative(field,x,indexTypes=["up"]){
-    if(!Array.isArray(indexTypes)||indexTypes.some(type=>type!=="up"&&type!=="down"))throw new TypeError("indexTypes entries must be 'up' or 'down'");
+    if(!Array.isArray(indexTypes)||Array.from(indexTypes).some(type=>type!=="up"&&type!=="down"))throw new TypeError("indexTypes entries must be 'up' or 'down'");
     if(indexTypes.length>24)throw new RangeError("tensor rank exceeds the covariant derivative index limit");
     const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),batchCount=batchShape.reduce((count,size)=>count*size,1),firstPoint=geometryBatchGet(parsed.data,batchShape,Array(batchShape.length).fill(0),batchShape),firstValue=field(firstPoint),shape=tensorShape(firstValue);
     if(shape.length!==indexTypes.length)throw new RangeError("indexTypes length must match tensor field rank");
@@ -115,6 +115,7 @@ export class Connection4 {
           const connection=indexTypes[axis]==="up"?g[slots[axis]][d][e]:g[e][d][slots[axis]];
           derivative+=(indexTypes[axis]==="up"?1:-1)*connection*tensorValue(value,replaced);
         }
+        if(!Number.isFinite(derivative))throw new RangeError("covariant derivative is non-finite");
         setTensorValue(out,[...slots,d],derivative);
       });
     }
@@ -122,7 +123,9 @@ export class Connection4 {
   }
   parallelTransport(value,path,{stepsPerSegment=8}={}){
     if(!Number.isInteger(stepsPerSegment)||stepsPerSegment<1)throw new RangeError("stepsPerSegment must be a positive integer");
-    const parsedPath=parseGeometryBatch(path,"path",[4]),parsedValue=parseGeometryBatch(value,"vector",[4]),pathLength=parsedPath.shape.at(-2),pathBatchShape=parsedPath.shape.slice(0,-2),valueBatchShape=parsedValue.shape.slice(0,-1);
+    const parsedPath=parseGeometryBatch(path,"path",[4]),parsedValue=parseGeometryBatch(value,"vector",[4]);
+    if(parsedPath.shape.length<2)throw new RangeError("path must contain at least two coordinate points");
+    const pathLength=parsedPath.shape.at(-2),pathBatchShape=parsedPath.shape.slice(0,-2),valueBatchShape=parsedValue.shape.slice(0,-1);
     if(pathLength<2)throw new RangeError("path must contain at least two coordinate points");
     const shape=geometryBatchShape(pathBatchShape,valueBatchShape),components=shape.reduce((p,n)=>p*n,1)*pathLength*4,work=shape.reduce((p,n)=>p*n,1)*(pathLength-1)*stepsPerSegment;
     if(!Number.isSafeInteger(components)||components>MAX_COVARIANT_COMPONENTS)throw new RangeError("parallel transport history exceeds the bounded component limit");
@@ -142,7 +145,7 @@ export class Connection4 {
     }
     return result;
   }
-  geodesicAcceleration(x,tangent){const position=parseGeometryBatch(x,"position",[4]),velocity=parseGeometryBatch(tangent,"tangent",[4]),batchShape=geometryBatchShape(position.shape.slice(0,-1),velocity.shape.slice(0,-1)),components=batchShape.reduce((count,size)=>count*size,1)*4;if(components>MAX_COVARIANT_COMPONENTS)throw new RangeError("geodesic acceleration batch exceeds the component limit");return geometryBuildBatch(batchShape,index=>{const point=geometryBatchGet(position.data,position.shape.slice(0,-1),index,batchShape),v=geometryBatchGet(velocity.data,velocity.shape.slice(0,-1),index,batchShape),g=this.christoffel(point),a=Array(4).fill(0);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)a[i]-=g[i][j][k]*v[j]*v[k];return a;});}
+  geodesicAcceleration(x,tangent){const position=parseGeometryBatch(x,"position",[4]),velocity=parseGeometryBatch(tangent,"tangent",[4]),batchShape=geometryBatchShape(position.shape.slice(0,-1),velocity.shape.slice(0,-1)),components=batchShape.reduce((count,size)=>count*size,1)*4;if(components>MAX_COVARIANT_COMPONENTS)throw new RangeError("geodesic acceleration batch exceeds the component limit");return geometryBuildBatch(batchShape,index=>{const point=geometryBatchGet(position.data,position.shape.slice(0,-1),index,batchShape),v=geometryBatchGet(velocity.data,velocity.shape.slice(0,-1),index,batchShape),g=this.christoffel(point),a=Array(4).fill(0);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)a[i]-=g[i][j][k]*v[j]*v[k];if(a.some(value=>!Number.isFinite(value)))throw new RangeError("geodesic acceleration is non-finite");return a;});}
 }
 
 export class Curvature4 {
