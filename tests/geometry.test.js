@@ -411,6 +411,17 @@ test("de Sitter FLRW metric reproduces analytic curvature and comoving geodesics
   assert.deepEqual(endpoint,[.5,0,0,0]);
 });
 
+test("de Sitter Riemann components obey the constant-curvature identity",()=>{
+  const H=.2,metric=x=>{const a=Math.exp(2*H*x[0]);return [[-1,0,0,0],[0,a,0,0],[0,0,a,0],[0,0,0,a]];};
+  const curvature=new Curvature4(metric,{step:2e-4});
+  for(const time of [-.3,.3]){
+    const point=[time,.1,-.2,.4],g=metric(point),R=curvature.riemann(point);
+    for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++){
+      const expected=H*H*((a===c?g[b][d]:0)-(a===d?g[b][c]:0));
+      assert.ok(Math.abs(R[a][b][c][d]-expected)<2e-8,`R^${a}_${b}${c}${d} at ${time}`);
+    }
+  }
+});
 test("Schwarzschild exterior is vacuum and matches its analytic Kretschmann scalar",()=>{
   const mass=.5,radius=3,theta=Math.PI/2,point=[0,radius,theta,.4];
   const schwarzschild=x=>{
