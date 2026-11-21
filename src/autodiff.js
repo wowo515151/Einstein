@@ -182,3 +182,32 @@ export function forwardSecondOrder(field,point){
   const rebuild=leaves=>{let i=0;const visit=depth=>depth===shape.length?leaves[i++]:Array.from({length:shape[depth]},()=>visit(depth+1));return visit(0);};
   return {value:rebuild(values),jacobian:rebuild(jacobian),hessian:rebuild(hessian)};
 }
+
+
+function prepareForwardTree(point){
+  const active=new Set(),values=[];
+  function inspect(node,depth){
+    if(typeof node==="number"){if(values.length>=32)throw new RangeError("input exceeds the 32-component limit");values.push(finite(node,"input value"));return [];}
+    if(ArrayBuffer.isView(node)&&!(node instanceof DataView))node=Array.from(node);
+    if(!Array.isArray(node)||node.length===0)throw new TypeError("input must be a nonempty rectangular array or scalar");
+    if(depth>=8)throw new RangeError("input rank exceeds eight");
+    if(node.length>32)throw new RangeError("input exceeds the 32-component limit");
+    if(active.has(node))throw new RangeError("input cannot contain cycles");
+    active.add(node);try{const children=Array.from(node,child=>inspect(child,depth+1)),shape=children[0];if(children.some(child=>JSON.stringify(child)!==JSON.stringify(shape)))throw new RangeError("input must be rectangular");return [node.length,...shape];}finally{active.delete(node);}
+  }
+  const shape=inspect(point,0);
+  const rebuild=flat=>{let i=0;const visit=depth=>depth===shape.length?flat[i++]:Array.from({length:shape[depth]},()=>visit(depth+1));return visit(0);};
+  return {values,rebuild};
+}
+
+/** Forward Jacobian for a scalar or rectangular input, flattened in row-major order. */
+export function forwardJacobianTree(field,point){
+  if(typeof field!=="function")throw new TypeError("field must be a function");
+  const input=prepareForwardTree(point);return forwardJacobian(values=>field(input.rebuild(values)),input.values);
+}
+
+/** Forward second derivatives for a scalar or rectangular input, flattened in row-major order. */
+export function forwardSecondOrderTree(field,point){
+  if(typeof field!=="function")throw new TypeError("field must be a function");
+  const input=prepareForwardTree(point);return forwardSecondOrder(values=>field(input.rebuild(values)),input.values);
+}

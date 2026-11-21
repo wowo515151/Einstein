@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Dual4,Jet4,forwardJacobian4,forwardJacobian,forwardHessian4,forwardSecondOrder4,forwardSecondOrder,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward,ODEWorldline,integrateRK4ForwardTree,integrateRK4ForwardBounds} from "../src/relativity/index.js";
+import {Dual4,Jet4,forwardJacobian4,forwardJacobian,forwardHessian4,forwardSecondOrder4,forwardSecondOrder,forwardJacobianTree,forwardSecondOrderTree,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward,ODEWorldline,integrateRK4ForwardTree,integrateRK4ForwardBounds} from "../src/relativity/index.js";
 
 const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(3).divide(x[3].pow(2).add(1)));
 function expected([t,x,y,z]){const denominator=1+z*z;return [Math.cos(t)*Math.exp(x),Math.sin(t)*Math.exp(x),3*y*y/denominator,-2*z*y**3/denominator**2];}
@@ -396,4 +396,15 @@ test("general second-order fields capture cross-group Hessians",()=>{
   let calls=0;assert.throws(()=>forwardSecondOrder(()=>++calls,point),/consistent/);
   const cycle=[];cycle.push(cycle);assert.throws(()=>forwardSecondOrder(()=>cycle,[1]),/cycles/);
   assert.throws(()=>forwardSecondOrder(()=>Array(21846).fill(0),[1]),/component limit/);
+});
+
+
+test("forward differentiation supports rectangular input trees",()=>{
+  const point=[[1,2],[3,4]],field=x=>x[0][0].multiply(x[1][1]).add(x[1][0].sin()),first=forwardJacobianTree(field,point),second=forwardSecondOrderTree(field,point);
+  assert.ok(Math.abs(first.value-(4+Math.sin(3)))<1e-15);assert.deepEqual(first.jacobian,[4,0,Math.cos(3),1]);assert.deepEqual(second.jacobian,first.jacobian);
+  assert.equal(second.hessian[0][3],1);assert.equal(second.hessian[3][0],1);assert.ok(Math.abs(second.hessian[2][2]+Math.sin(3))<1e-15);
+  assert.deepEqual(forwardJacobianTree(x=>x.pow(2),3),{value:9,jacobian:[6]});
+  const cycle=[];cycle.push(cycle);assert.throws(()=>forwardJacobianTree(()=>1,cycle),/cycles/);
+  assert.throws(()=>forwardSecondOrderTree(()=>1,[[1],[2,3]]),/rectangular/);
+  assert.throws(()=>forwardJacobianTree(()=>1,Array(33).fill(0)),/32-component/);
 });
