@@ -318,6 +318,8 @@ test("light-cone branch, scaled tolerances, and sampling match Lib4 semantics",(
   const nearlyParallel=new LightCone([0,0,0,0],{branch:"future",atol:1e-6});
   assert.deepEqual(nearlyParallel.intersectHypersurface([1,1+1e-7,0,0],-1,[[-1,0,0]]).hitMask,[false]);
   assert.throws(()=>new LightCone([0,0,0,0],{c:0}),RangeError);
+  for(const options of [{c:NaN},{c:Infinity},{c:-Infinity},{atol:NaN},{atol:Infinity}])
+    assert.throws(()=>new LightCone([0,0,0,0],options),/c must be positive and atol must be nonnegative/);
 });
 test("light-cone containment, surface checks, sampling, and hyperplane hits broadcast batches",()=>{
   const apex=new Event4([[0,0,0,0],[10,0,0,0]]),events=new Event4([[2,2,0,0],[8,2,0,0]]);

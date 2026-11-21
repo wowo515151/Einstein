@@ -25,11 +25,11 @@ export const scenes = Object.freeze([
   { id: "light-cone", title: "Light cone as an evolving sphere", category: "Causal structure", summary: "Each point forms a spherical cross-section of light emitted at one event. Move time through the past and future to watch the sphere shrink to the cone's apex and grow again; its radius follows r = c|Δt|.", limit: "Exact flat-spacetime geometry with c normalized to 1 for the display.", parameter: "Cone time", model: "exact" },
   { id: "lorentz", title: "Lorentz contraction and simultaneity", category: "Special relativity", summary: "The colored lines trace both ends of a rod through time, and the highlighted slices mark events judged simultaneous in each frame. Change frames to compare the measured rod length and see why simultaneity tilts between observers.", limit: "Exact one-dimensional Lorentz boost visualized in a normalized coordinate frame.", parameter: "Boost speed β = v/c", model: "exact" },
   { id: "twins", title: "Twin-paradox worldlines", category: "Relativistic motion", summary: "Two paths show a stay-at-home clock and a traveler who turns around and reunites with it. Follow the paths to compare their accumulated proper times; the extra depth separates the lines visually and is not a physical coordinate.", limit: "Exact proper-time result for the declared piecewise-constant-velocity path; acceleration duration is idealized as zero. Display depth separates the paths for visibility and is not a physical coordinate.", parameter: "Travel speed β = v/c", model: "exact" },
-  { id: "aberration", title: "Velocity addition and aberration", category: "Relativistic motion", summary: "The star-like dots show incoming light directions across the sky, and the boost changes their apparent directions. The readout composes two collinear velocities with the Lorentz transform and shows the result remains below light speed.", limit: "Exact collinear velocity composition and direction transformation for ideal light rays; star points are sampled over a finite angular grid.", parameter: "Boost speed β = v/c", model: "exact" },
-  { id: "fields", title: "Electric and magnetic field mixing", category: "Electromagnetism", summary: "The arrows show electric and magnetic field vectors before and after a boost. Change the observer speed to see how the fields mix while the displayed electromagnetic invariants remain unchanged.", limit: "Uniform-field special-relativity model. Axis scaling is normalized and does not represent a laboratory apparatus.", parameter: "Boost speed β = v/c", model: "exact" },
+  { id: "aberration", title: "Velocity addition and aberration", category: "Relativistic motion", summary: "The star-like dots show incoming light directions across the sky, and the boost changes their apparent directions. Playback highlights each sampled direction in turn; the readout composes two collinear velocities with the Lorentz transform and shows the result remains below light speed.", limit: "Exact collinear velocity composition and direction transformation for ideal light rays; star points are sampled over a finite angular grid.", parameter: "Boost speed β = v/c", model: "exact" },
+  { id: "fields", title: "Electric and magnetic field mixing", category: "Electromagnetism", summary: "The arrows show electric and magnetic field vectors before and after a boost. Change the observer speed to see how the fields mix while the displayed electromagnetic invariants remain unchanged. Playback scans a marker between the vector tips; the uniform field itself is time independent.", limit: "Uniform-field special-relativity model. Axis scaling is normalized and does not represent a laboratory apparatus.", parameter: "Boost speed β = v/c", model: "exact" },
   { id: "particle", title: "Charged-particle motion", category: "Electromagnetism", summary: "The curved track follows a charged test particle moving through a uniform magnetic field, with a marker showing its current position. Playback advances the numerically integrated orbit; the speed control changes its initial motion.", limit: "Numerically integrated test-charge path. Radiation, back-reaction, and field gradients are omitted.", parameter: "Speed fraction β = v/c", model: "numerical" },
   { id: "geodesic", title: "Gravitational lensing rays", category: "General relativity", summary: "Colored light-ray paths curve around a central mass in a softened weak-field spacetime. Compare their changing directions and the readout's null-geodesic check to see how curvature bends light in this teaching model.", limit: "Softened, static weak-field model for teaching lensing; not a calibrated or exact black-hole solution.", parameter: "Field strength μ/r₀", model: "pedagogical" },
-  { id: "curvature", title: "Curved-space embedding grid", category: "General relativity", summary: "The wire grid maps radial and angular positions onto a curved surface; its height visualizes the embedding and its color shows Gaussian curvature. Watch the radial grid spacing and surface color change with the curvature control.", limit: "Pedagogical surface-of-revolution metric. The embedding height is not a fourth spatial dimension or a literal force field.", parameter: "Curvature scale", model: "pedagogical" },
+  { id: "curvature", title: "Curved-space embedding grid", category: "General relativity", summary: "The wire grid maps radial and angular positions onto a curved surface; its height visualizes the embedding and its color shows Gaussian curvature. Watch the radial grid spacing and surface color change with the curvature control, while playback traces a radial path from the center to the edge and back.", limit: "Pedagogical surface-of-revolution metric. The embedding height is not a fourth spatial dimension or a literal force field.", parameter: "Curvature scale", model: "pedagogical" },
   { id: "field-slices", title: "Animated 4D field explorer", category: "Fields and solutions", summary: "A moving slice through a synthetic plane wave displays electric and magnetic arrows, observer paths, and translucent surfaces where the electric field has selected values. Playback advances the wave through time; the raised surface encodes field strength rather than a spatial height.", limit: "Synthetic plane-wave field for visualization; it is not a measured or independently validated physical solution.", parameter: "Field frequency", model: "synthetic numerical" },
 ]);
 
@@ -390,6 +390,27 @@ export function buildSceneData(sceneId, { time = 0, beta = .6, observerFrame = "
     time: normalizedTime,
     model: scene.model,
   }));
+}
+
+/** Position the visible playback cursor for scenes whose underlying model is time independent. */
+export function scenePlaybackCursor(sceneId, { time = 0, beta = .6, rows = buildSceneData(sceneId, { time, beta }) } = {}) {
+  finite(time, "time"); finite(beta, "beta");
+  if (time < 0 || time > 1) throw new RangeError("time must be in [0, 1]");
+  if (beta < 0 || beta >= 1) throw new RangeError("beta must be in [0, 1)");
+  let position;
+  if (sceneId === "aberration") {
+    const selected = rows[Math.min(rows.length - 1, Math.floor(time * rows.length))];
+    if (selected) position = [selected.x, selected.y, selected.z];
+  } else if (sceneId === "fields") {
+    const electric = rows.find((row) => row.id === "electric-tip"), magnetic = rows.find((row) => row.id === "magnetic-tip");
+    if (electric && magnetic) position = ["x", "y", "z"].map((axis) => electric[axis] + (magnetic[axis] - electric[axis]) * time);
+  } else if (sceneId === "curvature") {
+    const radius = 1.75 * (1 - Math.abs(2 * time - 1));
+    position = [radius, .55 * beta * Math.exp(-.38 * radius * radius), 0];
+  } else {
+    throw new RangeError(`Scene has no static-model playback cursor: ${sceneId}`);
+  }
+  return position && Object.freeze({ x: position[0], y: position[1], z: position[2] });
 }
 
 export const sampleLimit = MAX_SAMPLES;

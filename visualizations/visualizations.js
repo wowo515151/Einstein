@@ -1,7 +1,7 @@
 import { createViewerWithRuntime } from "../src/three-viz/core/mount.js";
 import { pointCloudPlotter } from "../src/three-viz/plotters/point-cloud-plotter.js";
 import { createCarPaintMaterial, retainCarPaintEnvironment } from "../src/three-viz/plotters/shared/materials.js";
-import { buildSceneData, composeCollinearVelocities, curvatureEmbeddingLibraryCheck, fieldIsosurfaces, fieldWorldlines, particleMomentumState, sceneAccessibleLabel, sceneFromFragment, scenes, sceneAxes, selectedWorldlineEvents, transformedFieldState, twinClockReadings, twinClockPositions } from "./scene-models.js";
+import { buildSceneData, composeCollinearVelocities, curvatureEmbeddingLibraryCheck, fieldIsosurfaces, fieldWorldlines, particleMomentumState, sceneAccessibleLabel, sceneFromFragment, scenePlaybackCursor, scenes, sceneAxes, selectedWorldlineEvents, transformedFieldState, twinClockReadings, twinClockPositions } from "./scene-models.js";
 import { createLabeledBox } from "../src/three-viz/objects/labeled-box.js";
 import { Vector4 } from "../src/relativity/index.js";
 import { createPlaybackController } from "./playback.js";
@@ -111,17 +111,19 @@ function updateModelReadout(rows) {
   } else if (activeScene.id === "curvature") {
     const center = rows.find((row) => row.id === "grid-8-8"), sample = rows.find((row) => row.id === "grid-12-8");
     if (!curvatureCheckCache || curvatureCheckCache.beta !== beta) curvatureCheckCache = { beta, value: curvatureEmbeddingLibraryCheck(beta, 0, 0) };
-    readout.textContent = `Surface metric overlay: radial gᵣᵣ = ${sample.radialMetric.toFixed(4)} at r = ${Math.hypot(sample.x, sample.z).toFixed(2)}; wire spacing represents the induced radial stretch. Surface color shows Gaussian curvature K; at the center K = ${center.gaussianCurvature.toFixed(4)}. Library check: R/2 = ${curvatureCheckCache.value.toFixed(4)} for a direct-product spacetime built from this surface metric, using finite differences. The embedding is pedagogical.`;
+    const cursorRadius = 1.75 * (1 - Math.abs(2 * time - 1));
+    readout.textContent = `Surface metric overlay: radial gᵣᵣ = ${sample.radialMetric.toFixed(4)} at r = ${Math.hypot(sample.x, sample.z).toFixed(2)}; wire spacing represents the induced radial stretch. Surface color shows Gaussian curvature K; at the center K = ${center.gaussianCurvature.toFixed(4)}. The playback marker scans from the center to the outer grid and back (r = ${cursorRadius.toFixed(2)}). Library check: R/2 = ${curvatureCheckCache.value.toFixed(4)} for a direct-product spacetime built from this surface metric, using finite differences. The embedding is pedagogical.`;
   } else if (activeScene.id === "field-slices") {
     const surfaces = fieldIsosurfaces(beta, time);
     readout.textContent = `Normalized vacuum plane wave: E points along x and B along y, propagating along +z at c = 1. Surface height displays 0.45 Eₓ, not physical y position. One playback cycle spans a wave period (ct = 2π × time / (1 + parameter)). ${surfaces.length} translucent sheets mark Eₓ = ±0.6. The synthetic inertial observer paths show field height at each event, not physical y or field-driven trajectories.`;
   } else if (activeScene.id === "fields") {
     const fields = transformedFieldState(beta);
     const list = (values) => values.map((value) => value.toFixed(3)).join(", ");
-    readout.textContent = `Library field tensor: E′ = [${list(fields.electric)}], B′ = [${list(fields.magnetic)}]. Invariants: B² − E²/c² = ${fields.invariants.magneticMinusElectricOverC2.toFixed(3)}, E·B = ${fields.invariants.electricDotMagnetic.toFixed(3)}.`;
+    readout.textContent = `Library field tensor: E′ = [${list(fields.electric)}], B′ = [${list(fields.magnetic)}]. Invariants: B² − E²/c² = ${fields.invariants.magneticMinusElectricOverC2.toFixed(3)}, E·B = ${fields.invariants.electricDotMagnetic.toFixed(3)}. Playback scans a marker between the fixed electric and magnetic vector tips; this uniform field is time independent.`;
   } else if (activeScene.id === "aberration") {
     const composed = composeCollinearVelocities(beta, beta);
-    readout.textContent = `Library Lorentz composition: two successive collinear velocities of ${beta.toFixed(2)}c produce ${composed.toFixed(3)}c, below c. The star field shows how one of those boosts changes light directions.`;
+    const selectedRay = Math.min(rows.length, Math.floor(time * rows.length) + 1);
+    readout.textContent = `Library Lorentz composition: two successive collinear velocities of ${beta.toFixed(2)}c produce ${composed.toFixed(3)}c, below c. The star field shows how one of those boosts changes light directions. Playback highlights sample ${selectedRay} of ${rows.length} in the fixed sky distribution.`;
   } else if (activeScene.id === "twins") {
     const clocks = twinClockReadings(beta, time);
     readout.textContent = `At ct = ${clocks.stayHome.toFixed(3)}: stay-home clock (blue) = ${clocks.stayHome.toFixed(3)}; traveler clock (pink) = ${clocks.traveler.toFixed(3)}. Reunion occurs at ct = ${clocks.reunion[0].toFixed(3)}.`;
@@ -205,6 +207,17 @@ export function drawSceneOverlays(context, sceneId, rows, colors, frame = { time
     const geometry = new THREE.SphereGeometry(radius, 32, 18);
     const material = createCarPaintMaterial(THREE, colors[sceneId], { transparent: true, opacity: .14, side: THREE.DoubleSide, depthWrite: false });
     add(new THREE.Mesh(geometry, material), geometry, material);
+  }
+  if (sceneId === "aberration" || sceneId === "fields" || sceneId === "curvature") {
+    const position = scenePlaybackCursor(sceneId, { time: frameTime, beta: frameBeta, rows });
+    if (position) {
+      const geometry = new THREE.SphereGeometry(.105, 18, 14);
+      const material = createCarPaintMaterial(THREE, 0xffd166);
+      const cursor = new THREE.Mesh(geometry, material);
+      cursor.position.set(position.x, position.y, position.z);
+      cursor.name = `${sceneId}-playback-cursor`;
+      add(cursor, geometry, material);
+    }
   }
   if (sceneId === "fields" || sceneId === "field-slices") {
     const tails = new Map(rows.filter((row) => row.id.endsWith("-tail")).map((row) => [row.id.slice(0, -5), row]));
