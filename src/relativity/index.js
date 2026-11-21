@@ -6,3 +6,4 @@ export * from "../geometry.js";
 export * from "../context.js";
 export * from "../gpu.js";
 export * from "../three-adapter.js";
+export * from "../serialization.js";

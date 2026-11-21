@@ -102,3 +102,15 @@ For raw rank-two input, `applyTensor` uses the Lorentz inverse convention `Î·Láµ
 `Metric4` and `Tensor4` expose read-only cached batch shape and rank metadata. `Tensor4.indexTypes` may be reassigned, but operations validate its entries and compatibility with the components.
 
 `LorentzTransform` operations reject a change to the constructed batch dimensions of its mutable matrix; construct a new transform for a different shape.
+
+## JSON interchange for value objects
+
+`serializeRelativity(value)` returns a versioned JSON string; `deserializeRelativity(json)` restores the corresponding value through its public constructor. Version 1 supports `Vector4`, `Covector4`, `Matrix4`, `Metric4`, `Tensor4`, `Bivector4`, `LeviCivita4`, `LorentzTransform`, `PoincareTransform`, `Event4`, `SpacetimeInterval`, `LightCone`, `InertialFrame`, `MaxwellEquations`, `FourVelocity`, `FourMomentum`, `FourCurrent`, and `EMFieldTensor`. It preserves component batches, tensor index types, event positions and simple frame labels, and relevant physical constants. `Event4`, `LightCone`, and `InertialFrame` interchange accepts only null or string frame labels; object-valued frames are rejected rather than silently losing identity. Inputs are validated again on both serialization and restoration: invalid mutable components, unsupported types, and invalid or unsupported records throw. Metric, bivector, electromagnetic and Lorentz values created with validation disabled must pass their standard validation to use this format. JSON strings are limited to 32 million characters.
+
+```js
+import { Vector4, serializeRelativity, deserializeRelativity } from "../src/relativity/index.js";
+const text = serializeRelativity(new Vector4([1, 2, 3, 4]));
+const vector = deserializeRelativity(text); // Vector4 with the same components
+```
+
+This format does not serialize functions, object-valued frame metadata, callbacks, GPU resources, or the remaining value and solver types. It is independent of ordinary `JSON.stringify` on class instances.
