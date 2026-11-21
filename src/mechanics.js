@@ -179,6 +179,7 @@ export class MaxwellEquations {
   energyMomentumTensor(fieldTensor,metric=null){if(!(fieldTensor instanceof EMFieldTensor))throw new TypeError("fieldTensor must be an EMFieldTensor");if(fieldTensor.c!==this.c||fieldTensor.epsilon0!==this.epsilon0)throw new RangeError("field tensor and Maxwell equations must share physical constants");return fieldTensor.energyMomentumTensor(metric??identity(4).map((r,i)=>r.map((x,j)=>x*(i===0?-1:1))));}
   evolve(electric,magnetic,{current=null,spacing=[1,1,1],dt,steps=1}={}){
     if(!Number.isSafeInteger(steps)||steps<1)throw new RangeError("steps must be a positive safe integer");
+    if(Number.isFinite(dt)&&dt>0&&(!Number.isFinite(steps*dt)||dt/2===0))throw new RangeError("Maxwell output time range is not representable");
     const eShape=shapeOf(electric),bShape=shapeOf(magnetic);
     if(eShape.length>4){
       const batchShape=eShape.slice(0,-4),gridShape=eShape.slice(-4,-1),cells=validateCellShape(gridShape,3),batchCount=shapeProduct(batchShape);

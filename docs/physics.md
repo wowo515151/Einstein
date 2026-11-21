@@ -72,3 +72,5 @@ Invariant mass normalizes momentum before division when individual component-to-
 When a Maxwell electric update overflows an intermediate term, evolution retries with scaled current and wave terms, and rejects a non-finite resulting electric field. This recovers selected finite updates but does not guarantee preservation of every extreme cancellation.
 
 Maxwell evolution and residual APIs reject non-finite output grids, including magnetic histories and scalar constraint residuals. Intermediate overflow can still prevent a representable final result.
+
+Maxwell evolution rejects time configurations whose final electric timestamp overflows or whose first magnetic half-step rounds to zero; the residual APIs accept their independently supplied histories and timestep.

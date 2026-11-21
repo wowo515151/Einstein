@@ -86,6 +86,13 @@ test("Maxwell current coupling survives an unrepresentable inverse permittivity"
   assert.ok(Math.abs(E[1][0][0][0][0]+.1)<1e-12);
   assert.ok(Math.abs(solver.maxwellResiduals(E,B,{...options,current}).ampere[0][0][0][0][0])<1e-12);
 });
+test("Maxwell evolution rejects unrepresentable output timelines",()=>{
+  const grid=()=>Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[0,0,0])));
+  assert.throws(()=>new MaxwellEquations({c:1e-308,epsilon0:1}).evolve(grid(),grid(),{spacing:[4,4,4],dt:1e308,steps:2}),/output time range is not representable/);
+  assert.throws(()=>new MaxwellEquations({c:1,epsilon0:1}).evolve(grid(),grid(),{spacing:[1,1,1],dt:Number.MIN_VALUE,steps:1}),/output time range is not representable/);
+  const [timesE,,timesB]=new MaxwellEquations({c:1,epsilon0:1}).evolve(grid(),grid(),{spacing:[1,1,1],dt:1e-310,steps:2});
+  assert.ok(timesB[0]>0);assert.ok(timesE.every(Number.isFinite));assert.ok(timesB.every(Number.isFinite));
+});
 test("Maxwell residual APIs reject non-finite diagnostic results",()=>{
   const grid=()=>Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[0,0,0])));
   const current=Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[1e308,1e308,0,0])));
