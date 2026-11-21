@@ -12,7 +12,7 @@ Renderer failures during the point update propagate so the prior geometry and ov
 
 Direct time and animation-frame updates use the last committed observer frame and model parameter, and preserve prior point data and marker rotation if the point update fails before commit.
 
-The field explorer's wave and its synthetic inertial observer markers share the coordinate-time mapping `ct = 2π time / (1 + beta)`, with normalized playback time from zero to one. The markers move at the declared subluminal speeds over the same wave period; their paths are spatial projections, not trajectories driven by the field.
+The field explorer surface plots display height `0.45 Eₓ` rather than physical y position. Its wave and synthetic inertial observer markers share the coordinate-time mapping `ct = 2π time / (1 + beta)`, with normalized playback time from zero to one. Each observer path is lifted to the field height at its own event; the model retains its physical y coordinate separately. The markers move at the declared subluminal speeds over the same wave period; these paths are not trajectories driven by the field.
 
 The `fieldIsosurfaces` helper computes both positive and negative electric-field levels over the requested spatial extent, with playback time interpreted periodically. It rejects requests producing more than 4,096 surfaces or whose extent cannot be represented safely.
 

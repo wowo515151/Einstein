@@ -103,7 +103,7 @@ function updateModelReadout(rows) {
     readout.textContent = `Surface metric overlay: radial gᵣᵣ = ${sample.radialMetric.toFixed(4)} at r = ${Math.hypot(sample.x, sample.z).toFixed(2)}; wire spacing represents the induced radial stretch. Surface color shows Gaussian curvature K; at the center K = ${center.gaussianCurvature.toFixed(4)}. This is a pedagogical embedded surface, not a spacetime metric.`;
   } else if (activeScene.id === "field-slices") {
     const surfaces = fieldIsosurfaces(beta, time);
-    readout.textContent = `Normalized vacuum plane wave: E points along x and B along y, propagating along +z at c = 1. One playback cycle spans a wave period (ct = 2π × time / (1 + parameter)). ${surfaces.length} translucent sheets mark Eₓ = ±0.6. The two marked paths are synthetic inertial observers, not field-driven trajectories.`;
+    readout.textContent = `Normalized vacuum plane wave: E points along x and B along y, propagating along +z at c = 1. Surface height displays 0.45 Eₓ, not physical y position. One playback cycle spans a wave period (ct = 2π × time / (1 + parameter)). ${surfaces.length} translucent sheets mark Eₓ = ±0.6. The synthetic inertial observer paths show field height at each event, not physical y or field-driven trajectories.`;
   } else if (activeScene.id === "fields") {
     const fields = transformedFieldState(beta);
     const list = (values) => values.map((value) => value.toFixed(3)).join(", ");
@@ -267,6 +267,7 @@ export function drawSceneOverlays(context, sceneId, rows, colors, frame = { time
       const markerMaterial = createCarPaintMaterial(THREE, index ? 0xff8f9c : 0xffd166);
       const marker = new THREE.Mesh(markerGeometry, markerMaterial);
       marker.position.set(worldline.current.x, worldline.current.y, worldline.current.z);
+      marker.name = `field-observer-${index}`;
       add(marker, markerGeometry, markerMaterial);
     }
     for (const surface of fieldIsosurfaces(frameBeta, frameTime)) {

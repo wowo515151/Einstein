@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
-import { buildSceneData, scenes, selectedWorldlineEvents } from "./scene-models.js";
+import { buildSceneData, fieldWorldlines, scenes, selectedWorldlineEvents } from "./scene-models.js";
 import { describeSample } from "./sample-inspection.js";
 import { createResourceRegistry } from "../src/three-viz/core/resource-registry.js";
 import { pointCloudPlotter } from "../src/three-viz/plotters/point-cloud-plotter.js";
@@ -129,6 +129,10 @@ test("application fallback supports keyboard sample inspection and scene changes
           assert.ok(marker);assert.equal(marker.position.x,row.x);assert.equal(marker.position.y,row.y);assert.equal(marker.position.z,row.z);
         });
       }
+      if(model.id==="field-slices")fieldWorldlines(beta,time).forEach((line,index)=>{
+        const marker=scene.getObjectByName(`field-observer-${index}`);
+        assert.ok(marker);assert.equal(marker.position.x,line.current.x);assert.equal(marker.position.y,line.current.y);assert.equal(marker.position.z,line.current.z);
+      });
       release();assert.equal(scene.children.length,0);assert.equal(registry.stats.resources,0);
       const points=pointCloudPlotter.create({THREE,scene,resources,requestRender(){}},{configuration:{}},rows);
       const object=scene.children[0],positions=object.geometry.getAttribute("position");

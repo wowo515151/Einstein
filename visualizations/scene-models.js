@@ -55,7 +55,7 @@ export const sceneAxes = Object.freeze({
   particle: Object.freeze({ x: "x position", y: "y position", z: "z position" }),
   geodesic: Object.freeze({ x: "x coordinate", y: "y coordinate", z: "z coordinate" }),
   curvature: Object.freeze({ x: "radial chart x", y: "embedding height", z: "radial chart z" }),
-  "field-slices": Object.freeze({ x: "x position", y: "y slice height", z: "wave direction z" }),
+  "field-slices": Object.freeze({ x: "x position", y: "display height (0.45 Eₓ)", z: "wave direction z" }),
 });
 
 function spherePoints(time, count) {
@@ -129,7 +129,7 @@ export function planeWaveState(beta,time,z) {
   return {ct,electric:field.electricField(),magnetic:field.magneticField()};
 }
 
-/** Two inertial worldlines projected into the field explorer's spatial view. */
+/** Two inertial worldlines lifted onto field-amplitude heights at each event. */
 export function fieldWorldlines(beta, time) {
   finite(beta, "beta"); finite(time, "time");
   if (beta < 0 || beta >= 1 || time < 0 || time > 1) throw new RangeError("beta and time must be in their supported ranges");
@@ -137,7 +137,7 @@ export function fieldWorldlines(beta, time) {
     const eventAt = t => {
       const ct = PI2 * t / (1 + beta);
       const event = new Event4([ct, direction * ((.2 + .6 * beta) * ct - .4), .45 * direction, direction * .6]);
-      return { ct: event.position[0], x: event.position[1], y: event.position[2], z: event.position[3] };
+      return { ct: event.position[0], x: event.position[1], y: .45 * planeWaveState(beta,t,event.position[3]).electric[0], z: event.position[3], physicalY: event.position[2] };
     };
     return { path: Array.from({ length: 25 }, (_, i) => eventAt(i / 24)), current: eventAt(time) };
   });
@@ -289,13 +289,14 @@ function scenePoints(sceneId, time, beta, observerFrame = "lab") {
     }));
   }
   if (sceneId === "field-slices") {
-    const phase = time * PI2;
-    const slice = (x, z) => .45 * Math.sin(beta * 4 * x + phase) * Math.cos(beta * 3 * z - phase * .7);
+    const fieldsByZ = new Map();
+    const fieldAt = z => { if (!fieldsByZ.has(z)) fieldsByZ.set(z, planeWaveState(beta, time, z)); return fieldsByZ.get(z); };
+    const slice = (_x, z) => .45 * fieldAt(z).electric[0];
     const rows = gridPoints(2, 16, slice);
     const positions = [-2, -2 / 3, 2 / 3, 2];
     for (let i = 0; i < positions.length; i++) for (let j = 0; j < positions.length; j++) {
       const x = positions[i], z = positions[j], y = slice(x, z);
-      const field=planeWaveState(beta,time,z);
+      const field=fieldAt(z);
       rows.push(...vectorGlyphs(`electric-slice-${i}-${j}`, field.electric, [x, y, z]));
       rows.push(...vectorGlyphs(`magnetic-slice-${i}-${j}`, field.magnetic, [x, y, z]));
     }

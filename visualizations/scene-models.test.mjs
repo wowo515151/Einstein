@@ -94,6 +94,8 @@ test("field explorer worldlines are subluminal and mark the selected time",()=>{
     assert.notEqual(line.path.at(-1).x,line.path[0].x);
     assert.ok(Math.abs(line.current.ct-planeWaveState(beta,.5,line.current.z).ct)<1e-12);
     assert.ok(Math.abs(Math.abs(line.path.at(-1).x-line.path[0].x)/elapsed-(.2+.6*beta))<1e-12);
+    assert.ok(line.path.every((event,index)=>Math.abs(event.y-.45*planeWaveState(beta,index/24,event.z).electric[0])<1e-12));
+    assert.ok(line.path.every(event=>event.physicalY===line.current.physicalY));
   }
   assert.throws(()=>fieldWorldlines(1,.5),/supported ranges/);
 });
@@ -146,6 +148,9 @@ test("curved embedding exposes its induced radial metric and Gaussian curvature"
 });
 test("animated field slice carries paired E/B vectors and analytic isosurfaces", () => {
   const beta = .62, time = .37, rows = buildSceneData("field-slices", { beta, time });
+  const grid=rows.filter(row=>row.id.startsWith("grid-"));
+  assert.equal(grid.length,256);
+  for(const row of grid)assert.ok(Math.abs(row.y-.45*Math.cos((1+beta)*row.z-time*Math.PI*2))<1e-12);
   const tips = rows.filter((row) => row.vector);
   assert.equal(tips.length, 32);
   for (const row of tips) {
