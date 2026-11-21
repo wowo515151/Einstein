@@ -628,3 +628,14 @@ test("Maxwell grid coordinates expose component-specific Yee locations",()=>{
   assert.throws(()=>solver.gridCoordinates({shape:[2,2,2],origin:[1e308,0,0],spacing:[1e308,1,1]}),/non-finite/);
   assert.throws(()=>solver.gridCoordinates({shape:[33,33,33]}),/cell limit/);
 });
+
+
+test("Maxwell collocation aligns staggered fields in space and time",()=>{
+  const solver=new MaxwellEquations({c:1,epsilon0:1}),make=fn=>Array.from({length:3},(_,i)=>Array.from({length:3},(_,j)=>Array.from({length:3},(_,k)=>fn(i,j,k))));
+  const e=make((i,j,k)=>[i,10*j,100*k]),b=offset=>make((i,j,k)=>[10*j+100*k+offset,i+100*k+offset,i+10*j+offset]);
+  const fields=solver.collocateFields(e,b(-2),b(2));
+  assert.deepEqual(fields.electric[1][1][1],[.5,5,50]);assert.deepEqual(fields.magnetic[1][1][1],[55,50.5,5.5]);
+  assert.deepEqual(fields.electric[0][0][0],[1,10,100]);assert.deepEqual(fields.magnetic[0][0][0],[110,101,11]);
+  const constants=make(()=>[1e308,-1e308,1e308]),same=solver.collocateFields(constants,constants,constants);assert.deepEqual(same.electric[0][0][0],[1e308,-1e308,1e308]);assert.deepEqual(same.magnetic[0][0][0],[1e308,-1e308,1e308]);
+  assert.throws(()=>solver.collocateFields(e,b(0),[[[[0,0,0]]]]),/grid dimensions|at least 2/);
+});

@@ -137,6 +137,23 @@ export class MaxwellEquations {
     const make=offset=>nestedFrom(dimensions,index=>index.map((value,axis)=>start[axis]+(value+offset[axis])*delta[axis]));
     return {electric:[[.5,0,0],[0,.5,0],[0,0,.5]].map(make),magnetic:[[0,.5,.5],[.5,0,.5],[.5,.5,0]].map(make),charge:make([0,0,0]),magneticDivergence:make([.5,.5,.5])};
   }
+  /** Interpolate staggered fields to charge nodes at the electric sample time. */
+  collocateFields(electric,magneticBefore,magneticAfter){
+    const e=grid(electric),before=grid(magneticBefore),after=grid(magneticAfter);sameGrid(e,before);sameGrid(e,after);
+    const shape=e.shape;if(shape.some(size=>size<2))throw new RangeError("each spatial grid dimension must have at least 2 points");
+    const sample=(field,index,component)=>field.values[(index[0]*shape[1]+index[1])*shape[2]+index[2]][component];
+    const shifted=(index,axis)=>index.map((value,i)=>i===axis?(value+shape[i]-1)%shape[i]:value);
+    const average2=(a,b)=>weightedDot4([a,b,0,0],[1,1,0,0],[.5,.5,0,0]);
+    const average4=values=>weightedDot4(values,[1,1,1,1],[.25,.25,.25,.25]);
+    const electricNodes=nestedFrom(shape,index=>Array.from({length:3},(_,axis)=>average2(sample(e,index,axis),sample(e,shifted(index,axis),axis))));
+    const magneticNodes=nestedFrom(shape,index=>Array.from({length:3},(_,axis)=>{
+      const other=[0,1,2].filter(i=>i!==axis),a=shifted(index,other[0]),b=shifted(index,other[1]),ab=shifted(a,other[1]);
+      const spatial=field=>average4([sample(field,index,axis),sample(field,a,axis),sample(field,b,axis),sample(field,ab,axis)]);
+      return average2(spatial(before),spatial(after));
+    }));
+    if([...electricNodes.flat(3),...magneticNodes.flat(3)].some(value=>!Number.isFinite(value)))throw new RangeError("collocated field is non-finite");
+    return {electric:electricNodes,magnetic:magneticNodes};
+  }
   maxwellResiduals(electricHistory,magneticHalfHistory,{spacing=[1,1,1],dt,current=null}={}){
     const eShape=shapeOf(electricHistory),bShape=shapeOf(magneticHalfHistory);
     if(eShape.length>5){
