@@ -297,6 +297,29 @@ test("plane-wave readback loss falls back before a replacement device is used",a
     backend.dispose();
   });
 });
+test("disposal settles pending adapter and readback operations",async()=>{
+  const adapterStarted=deferred(),adapter=deferred();let requests=0;
+  await withMockGpu({requestAdapter:()=>{adapterStarted.resolve();return adapter.promise;}},async()=>{
+    const backend=new WebGPUBackend(),pending=backend.minkowskiDotBatch([2,1,0,0],[2,1,0,0]);
+    await adapterStarted.promise;backend.dispose();assert.deepEqual(await pending,[-3]);assert.equal(backend.status,"disposed");assert.equal(backend._disposeWaiters.size,0);
+    adapter.resolve({requestDevice:()=>{requests++;}});await Promise.resolve();await Promise.resolve();assert.equal(requests,0);assert.equal(backend.adapter,null);
+  });
+  const started=deferred(),readback=deferred(),execution=mockExecutionDevice(()=>{started.resolve();return readback.promise;});
+  await withMockGpu({requestAdapter:async()=>({requestDevice:async()=>execution.device})},async()=>{
+    const backend=new WebGPUBackend(),pending=backend.minkowskiDotBatch([2,1,0,0],[2,1,0,0]);
+    await started.promise;backend.dispose();assert.deepEqual(await pending,[-3]);assert.equal(backend.status,"disposed");assert.equal(execution.destroyedBuffers(),4);assert.equal(backend._disposeWaiters.size,0);
+    readback.reject(new Error("late mapping failure"));await Promise.resolve();
+  });
+});
+test("disposal settles pending wave compilation through CPU fallback",async()=>{
+  const execution=mockExecutionDevice(),started=deferred(),compilation=deferred();
+  execution.device.createShaderModule=({code})=>({getCompilationInfo:()=>code.includes("fn plane_wave")?(started.resolve(),compilation.promise):Promise.resolve({messages:[]})});
+  await withMockGpu({requestAdapter:async()=>({requestDevice:async()=>execution.device})},async()=>{
+    const backend=new WebGPUBackend(),pending=backend.samplePlaneWaveBatch([0,0,0,0]);
+    await started.promise;backend.dispose();assert.deepEqual(await pending,[{electric:[1,0,0],magnetic:[0,1,0]}]);assert.equal(backend.status,"disposed");assert.equal(backend._disposeWaiters.size,0);
+    compilation.resolve({messages:[]});await Promise.resolve();await Promise.resolve();assert.equal(backend.wavePipeline,null);
+  });
+});
 test("device loss resolves a pending readback through CPU fallback",async()=>{
   const started=deferred(),readback=deferred(),execution=mockExecutionDevice(()=>{started.resolve();return readback.promise;});
   await withMockGpu({requestAdapter:async()=>({requestDevice:async()=>execution.device})},async()=>{
