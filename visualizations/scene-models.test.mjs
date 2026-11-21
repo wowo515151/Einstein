@@ -415,9 +415,13 @@ test("twin paths reunite and proper times use the library interval", () => {
   assert.deepEqual(twinClockPositions(beta, 0).map(p => p.y), [-2, -2]);
   assert.ok(Math.abs(twinClockPositions(beta, .5)[1].x) < 1e-12);
   assert.deepEqual(twinClockPositions(beta, 1).map(p => p.x), [-1.2, -1.2]);
+  for(const t of [0,1]){const [home,traveler]=twinClockPositions(beta,t);assert.deepEqual(home,traveler);}
+  const midpoint=twinClockPositions(beta,.5);assert.notEqual(midpoint[0].z,midpoint[1].z);
   const samples = buildSceneData("twins", { beta });
   const home = samples.filter((row) => row.id.startsWith("stay-home-"));
   const traveler = samples.filter((row) => row.id.startsWith("traveler-"));
+  for(const index of [0,home.length-1]){for(const axis of ["x","y","z"])assert.equal(home[index][axis],traveler[index][axis]);}
+  assert.notEqual(home[70].z,traveler[70].z);
   assert.equal(home.length, 140);
   assert.equal(traveler.length, 140);
   assert.equal(home[0].x, home.at(-1).x);

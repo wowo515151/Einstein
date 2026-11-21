@@ -24,7 +24,7 @@ export const scenes = Object.freeze([
   { id: "minkowski", title: "Minkowski spacetime", category: "Special relativity", summary: "A spacetime diagram with stationary and moving inertial worldlines. Select the laboratory or moving observer frame to compare their coordinates.", limit: "Exact straight-worldline model. The displayed projection is a 3D view of selected 4D coordinates.", parameter: "Observer speed β = v/c", model: "exact" },
   { id: "light-cone", title: "Light cone as an evolving sphere", category: "Causal structure", summary: "A light-cone slice contracts toward the apex and expands into the future, with radius r = c|Δt|.", limit: "Exact flat-spacetime geometry with c normalized to 1 for the display.", parameter: "Cone time", model: "exact" },
   { id: "lorentz", title: "Lorentz contraction and simultaneity", category: "Special relativity", summary: "Compare a rest-frame rod with its boosted-frame length and a tilted simultaneity slice.", limit: "Exact one-dimensional Lorentz boost visualized in a normalized coordinate frame.", parameter: "Boost speed β = v/c", model: "exact" },
-  { id: "twins", title: "Twin-paradox worldlines", category: "Relativistic motion", summary: "Two ideal clocks follow inertial and piecewise-inertial paths and reunite at a shared event.", limit: "Exact proper-time result for the declared piecewise-constant-velocity path; acceleration duration is idealized as zero.", parameter: "Travel speed β = v/c", model: "exact" },
+  { id: "twins", title: "Twin-paradox worldlines", category: "Relativistic motion", summary: "Two ideal clocks follow inertial and piecewise-inertial paths and reunite at a shared event.", limit: "Exact proper-time result for the declared piecewise-constant-velocity path; acceleration duration is idealized as zero. Display depth separates the paths for visibility and is not a physical coordinate.", parameter: "Travel speed β = v/c", model: "exact" },
   { id: "aberration", title: "Velocity addition and aberration", category: "Relativistic motion", summary: "Compose collinear subluminal velocities with a Lorentz transform while a sampled star field shows the corresponding aberration of light directions.", limit: "Exact collinear velocity composition and direction transformation for ideal light rays; star points are sampled over a finite angular grid.", parameter: "Boost speed β = v/c", model: "exact" },
   { id: "fields", title: "Electric and magnetic field mixing", category: "Electromagnetism", summary: "Electric and magnetic field vectors transform together under a boost, while the field invariants remain fixed.", limit: "Uniform-field special-relativity model. Axis scaling is normalized and does not represent a laboratory apparatus.", parameter: "Boost speed β = v/c", model: "exact" },
   { id: "particle", title: "Charged-particle motion", category: "Electromagnetism", summary: "A test charge follows an RK4 worldline under the library's Lorentz force in a uniform magnetic field.", limit: "Numerically integrated test-charge path. Radiation, back-reaction, and field gradients are omitted.", parameter: "Speed fraction β = v/c", model: "numerical" },
@@ -49,7 +49,7 @@ export const sceneAxes = Object.freeze({
   minkowski: Object.freeze({ x: "x position", y: "ct time", z: "projection depth" }),
   "light-cone": Object.freeze({ x: "x position", y: "y position", z: "z position" }),
   lorentz: Object.freeze({ x: "x position", y: "ct time", z: "projection depth" }),
-  twins: Object.freeze({ x: "x position", y: "ct time", z: "path separation" }),
+  twins: Object.freeze({ x: "x position", y: "ct time", z: "illustrative path separation" }),
   aberration: Object.freeze({ x: "light direction x", y: "light direction y", z: "light direction z" }),
   fields: Object.freeze({ x: "display/vector x component", y: "display/vector y component", z: "display/vector z component" }),
   particle: Object.freeze({ x: "x position", y: "y position", z: "z position" }),
@@ -155,6 +155,7 @@ export function selectedWorldlineEvents(sceneId,beta,time,observerFrame="lab") {
     return {x,y:ct,z:0};
   });
 }
+function twinDisplayDepth(ct) { return ct === 0 || ct === 4 ? 0 : .12 * Math.sin(Math.PI * ct / 4); }
 function scenePoints(sceneId, time, beta, observerFrame = "lab") {
   if (sceneId === "light-cone") return spherePoints(time, 220);
   if (sceneId === "lorentz") {
@@ -194,7 +195,7 @@ function scenePoints(sceneId, time, beta, observerFrame = "lab") {
       const sample = index % count;
       const t = sample / (count - 1) * 4;
       const x = observer === "stay-home" ? 0 : (t <= 2 ? beta * t : beta * (4 - t));
-      return point(`${observer}-${sample}`, x - 2 * beta, t - 2, observer === "stay-home" ? -.12 : .12, `${observer} clock`);
+      return point(`${observer}-${sample}`, x - 2 * beta, t - 2, ((observer === "stay-home" ? -1 : 1) * twinDisplayDepth(t)) || 0, `${observer} clock`);
     });
   }
   if (sceneId === "aberration") {
@@ -354,9 +355,10 @@ export function twinClockReadings(beta, time = 1) {
 export function twinClockPositions(beta, time = 1) {
   const { stayHome: ct } = twinClockReadings(beta, time);
   const travelerX = ct <= 2 ? beta * ct : beta * (4 - ct);
+  const depth = twinDisplayDepth(ct);
   return [
-    { x: -2 * beta, y: ct - 2, z: -.12 },
-    { x: travelerX - 2 * beta, y: ct - 2, z: .12 },
+    { x: -2 * beta, y: ct - 2, z: -depth || 0 },
+    { x: travelerX - 2 * beta, y: ct - 2, z: depth },
   ];
 }
 
