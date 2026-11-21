@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Dual4,Jet4,forwardJacobian4,forwardHessian4,DifferentialOperators4,Connection4,Geodesic4,Metric4} from "../src/relativity/index.js";
+import {Dual4,Jet4,forwardJacobian4,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4} from "../src/relativity/index.js";
 
 const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(3).divide(x[3].pow(2).add(1)));
 function expected([t,x,y,z]){const denominator=1+z*z;return [Math.cos(t)*Math.exp(x),Math.sin(t)*Math.exp(x),3*y*y/denominator,-2*z*y**3/denominator**2];}
@@ -145,4 +145,23 @@ test("second-order jet domains and scalar output are validated",()=>{
   assert.throws(()=>x.sqrt(),/positive/);assert.throws(()=>x.pow(1.5),/second derivative/);assert.throws(()=>x.divide(0),/zero/);assert.throws(()=>Math.sin(x),/implicitly converted/);
   assert.throws(()=>forwardHessian4(p=>[p[0],p[1]],[1,2,3,4]),/scalar/);
   assert.deepEqual(forwardHessian4(()=>5,[0,0,0,0]).hessian,Array.from({length:4},()=>[0,0,0,0]));
+});
+
+
+test("second-order rectangular fields expose coordinate derivative axes",()=>{
+  const field=p=>[[p[0].pow(2),p[0].multiply(p[1])],[p[2].sin(),3]],point=[2,3,.4,0],result=forwardSecondOrder4(field,point);
+  assert.deepEqual(result.value,[[4,6],[Math.sin(.4),3]]);
+  assert.deepEqual(result.jacobian[0][1],[3,2,0,0]);
+  assert.equal(result.hessian[0][0][0][0],2);assert.equal(result.hessian[0][1][0][1],1);assert.equal(result.hessian[0][1][1][0],1);
+  assert.equal(result.hessian[1][0][2][2],-Math.sin(.4));assert.deepEqual(result.hessian[1][1],Array.from({length:4},()=>[0,0,0,0]));
+  const batch=new DifferentialOperators4().tensorHessianForward(field,[point,point]);assert.deepEqual(batch,[result.hessian,result.hessian]);
+});
+
+test("second-order rectangular fields enforce output and batch bounds",()=>{
+  const p=[0,0,0,0],cycle=[];cycle.push(cycle);
+  assert.throws(()=>forwardSecondOrder4(()=>cycle,p),/cycles/);
+  assert.throws(()=>forwardSecondOrder4(()=>[[1],[2,3]],p),/rectangular/);
+  assert.throws(()=>forwardSecondOrder4(()=>Array(3121).fill(0),p),/component limit/);
+  assert.throws(()=>forwardSecondOrder4(()=>[NaN],p),/finite/);
+  assert.throws(()=>new DifferentialOperators4().tensorHessianForward(q=>q[0].value===0?[q[0]]:[q[0],q[1]],[p,[1,0,0,0]]),/shape/);
 });

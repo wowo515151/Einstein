@@ -101,3 +101,27 @@ export function forwardHessian4(field,point){
   if(!(output instanceof Jet4)&&typeof output!=="number")throw new TypeError("forward Hessian requires a scalar field");
   const result=asJet(output);return {value:result.value,gradient:Array.from(result.derivatives),hessian:result.hessian.map(row=>Array.from(row))};
 }
+
+/** Evaluate a bounded rectangular field with explicit second-order jets. */
+export function forwardSecondOrder4(field,point){
+  if(typeof field!=="function")throw new TypeError("field must be a function");
+  if((!Array.isArray(point)&&!ArrayBuffer.isView(point))||point.length!==4)throw new RangeError("point must have four coordinates");
+  const limit=Math.floor(65536/21),output=field(Array.from(point,(value,axis)=>Jet4.variable(value,axis))),active=new Set();let count=0;
+  function unpack(node,depth){
+    if(node instanceof Jet4||typeof node==="number"){
+      if(++count>limit)throw new RangeError("forward second-order output exceeds the component limit");
+      const j=asJet(node);return {value:j.value,jacobian:Array.from(j.derivatives),hessian:j.hessian.map(row=>Array.from(row)),shape:[]};
+    }
+    if(!Array.isArray(node)||node.length===0)throw new TypeError("forward second-order output must be a nonempty rectangular array or scalar");
+    if(depth>=8)throw new RangeError("forward second-order output rank exceeds eight");
+    if(node.length>limit)throw new RangeError("forward second-order output exceeds the component limit");
+    if(active.has(node))throw new RangeError("forward second-order output cannot contain cycles");
+    active.add(node);
+    try{
+      const children=Array.from(node,child=>unpack(child,depth+1)),shape=children[0].shape;
+      if(children.some(child=>JSON.stringify(child.shape)!==JSON.stringify(shape)))throw new RangeError("forward second-order output must be rectangular");
+      return {value:children.map(child=>child.value),jacobian:children.map(child=>child.jacobian),hessian:children.map(child=>child.hessian),shape:[node.length,...shape]};
+    }finally{active.delete(node);}
+  }
+  const result=unpack(output,0);return {value:result.value,jacobian:result.jacobian,hessian:result.hessian};
+}

@@ -1,7 +1,7 @@
 import {C,vector,matrix,zeros,identity,transpose,mmul,mvec,inverse,determinantRoot,dot,scale,add,sub,minkowskiDot} from "./array.js";
 import {Metric4,LorentzTransform} from "./algebra.js";
 import {Event4,integrateRK4} from "./spacetime.js";
-import {forwardJacobian4,forwardHessian4} from "./autodiff.js";
+import {forwardJacobian4,forwardHessian4,forwardSecondOrder4} from "./autodiff.js";
 
 function geometryMetric(value){return matrix(value instanceof Metric4?value._checkedComponents().data:value);}
 function differenceStencil(point,axis,step){const plus=point.slice(),minus=point.slice();plus[axis]+=step;minus[axis]-=step;const span=plus[axis]-minus[axis],forward=plus[axis]-point[axis],backward=point[axis]-minus[axis];if(!Number.isFinite(span)||!(forward>0)||!(backward>0))throw new RangeError("finite-difference step must produce distinct finite stencil points");return {plus,minus,span,forward,backward};}
@@ -111,6 +111,7 @@ export class DifferentialOperators4 {
     if(out.some(row=>row.some(value=>!Number.isFinite(value))))throw new RangeError("Hodge dual components are non-finite");
     return out;
   }
+  tensorHessianForward(fn,x){return this._mapPoints(x,p=>forwardSecondOrder4(fn,p).hessian,(_value,components)=>3*components);}
   hessianForward(fn,x){return this._mapPoints(x,p=>forwardHessian4(fn,p).hessian,64);}
   dAlembertianForward(fn,x){return this._mapPoints(x,p=>{
     const field=forwardHessian4(fn,p),g=inverse(this._g(p)),gamma=this.connection.christoffel(p);let result=0;
