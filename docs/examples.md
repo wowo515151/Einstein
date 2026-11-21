@@ -152,3 +152,34 @@ const grid = await samplePlaneWaveGrid({ shape: [1, 1, 2], spacing: [1, 1, Math.
 console.log(Array.from(grid.events)); // [0,0,0,0, 0,0,0,π/2]
 console.log(grid.fields.map(field => field.electric[0])); // approximately [1, 0]
 ```
+
+## Forward geodesic boundary shooting
+
+For a metric callback written using the `Dual4` and `Jet4` method names, forward sensitivities propagate alongside the geodesic. This example uses the curved coordinate metric `g₁₁ = exp(2x¹)` and shoots to an analytically known endpoint. The callback and connection must support the forward path; see [Connection and curvature](geometry.md) for its limits.
+
+```js
+import { Connection4, Geodesic4 } from "../src/relativity/index.js";
+const metric = p => [[-1,0,0,0],[0,p[1].multiply(2).exp(),0,0],[0,0,1,0],[0,0,0,1]];
+const connection = new Connection4(metric, { metricDerivative: "forward" });
+const initial = new Geodesic4(connection, [0,0,0,0], [1,.1,0,0]);
+const result = initial.solveBoundary([1,Math.log(1.5),0,0], [0,1], {
+  steps: 32, tolerance: 1e-7, jacobianMethod: "forward", format: "components"
+});
+console.log(result[3]); // fitted initial tangent approximately [1, 0.5, 0, 0]
+```
+
+## Collocating Maxwell histories
+
+The solver stores electric and magnetic components at staggered locations and times. Collocate interior frames before combining them in a field tensor. The returned indices map back to the original electric timestamps; see [Physics and fields](physics.md) for the interpolation and endpoint limits.
+
+```js
+import { MaxwellEquations, EMFieldTensor } from "../src/relativity/index.js";
+const grid = value => Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>value.slice())));
+const solver = new MaxwellEquations({c:1,epsilon0:1});
+const [times,electric,,magnetic] = solver.evolve(grid([1,0,0]),grid([0,0,0]),{spacing:[1,1,1],dt:.1,steps:2});
+const aligned = solver.collocateHistory(electric,magnetic);
+const electricNode = aligned.electric[0][0][0][0];
+const magneticNode = aligned.magnetic[0][0][0][0];
+const field = EMFieldTensor.fromEB(electricNode,magneticNode,{c:1,epsilon0:1});
+console.log(times[aligned.frameIndices[0]],field.invariants()); // 0.1, with B²-E² = -1
+```

@@ -15,6 +15,8 @@ test("documented JavaScript examples execute against the local library",async()=
     "Plane-wave spatial grid":"{events:Array.from(grid.events),amplitudes:grid.fields.map(field=>field.electric[0])}",
     "Scalar RK4 integration":"solution.at(-1)",
     "Rectangular field derivatives":"derivative",
+    "Forward geodesic boundary shooting":"result[3]",
+    "Collocating Maxwell histories":"{time:times[aligned.frameIndices[0]],invariants:field.invariants()}",
   };
   for(const {title,code} of examples){
     const expression=checks[title],probe=expression?`\nconsole.log('__EXAMPLE_RESULT__'+JSON.stringify(${expression}));`:"";
@@ -26,6 +28,8 @@ test("documented JavaScript examples execute against the local library",async()=
     const actual=JSON.parse(line.slice("__EXAMPLE_RESULT__".length));
     if(title==="Euclidean and Minkowski products")assert.deepEqual(actual,[5,-3]);
     else if(title==="Geodesic initial-value problem")actual.forEach((value,i)=>assert.ok(Math.abs(value-[1,.5,0,0][i])<1e-12));
+    else if(title==="Forward geodesic boundary shooting")actual.forEach((value,i)=>assert.ok(Math.abs(value-[1,.5,0,0][i])<1e-6));
+    else if(title==="Collocating Maxwell histories"){assert.equal(actual.time,.1);assert.equal(actual.invariants.magneticMinusElectricOverC2,-1);assert.equal(actual.invariants.electricDotMagnetic,0);}
     else if(title==="Scalar RK4 integration"){assert.equal(actual[0],1);assert.ok(Math.abs(actual[1]-Math.E)<1e-6);}
     else if(title==="Rectangular field derivatives")actual.forEach((row,i)=>row.forEach((value,j)=>assert.ok(Math.abs(value-[[1,1,0,0],[0,0,4,3]][i][j])<1e-9)));
     else if(title==="Plane-wave spatial grid"){
