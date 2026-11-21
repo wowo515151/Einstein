@@ -315,3 +315,13 @@ test("bounded forward RK4 handles coupled sensitivity directions beyond four sta
   assert.throws(()=>integrateRK4Forward(()=>[1,2],[0],0,1,2),/shape/);
   let count=0;assert.throws(()=>integrateRK4Forward((_t,x)=>{count++;return x.map(()=>count);},Array(5).fill(0),0,1,2),/consistent/);
 });
+
+
+test("forward ODE differentiates explicit parameters across dual groups",()=>{
+  const rhs=(_t,x,p)=>[x[0].multiply(p[0].add(p[4]))],parameters=[.1,0,0,0,.2],last=integrateRK4Forward(rhs,[2],0,2,64,{parameters,withRespectTo:"parameters"}).at(-1),expected=2*Math.exp(.6);
+  assert.ok(Math.abs(last.value[0]-expected)<1e-8);
+  for(let i=0;i<5;i++)assert.ok(Math.abs(last.jacobian[0][i]-([0,4].includes(i)?2*expected:0))<1e-8);
+  const initial=integrateRK4Forward(rhs,[2],0,2,64,{parameters}).at(-1);assert.ok(Math.abs(initial.jacobian[0][0]-Math.exp(.6))<1e-8);
+  assert.throws(()=>integrateRK4Forward(rhs,[2],0,1,4,{withRespectTo:"parameters"}),/at least one parameter/);
+  assert.throws(()=>integrateRK4Forward(rhs,[2],0,1,4,{parameters,withRespectTo:"bad"}),/withRespectTo/);
+});
