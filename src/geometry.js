@@ -3,9 +3,14 @@ import {Metric4,LorentzTransform} from "./algebra.js";
 import {Event4,integrateRK4} from "./spacetime.js";
 
 function geometryMetric(value){return matrix(value instanceof Metric4?value._checkedComponents().data:value);}
-function differenceStencil(point,axis,step){const plus=point.slice(),minus=point.slice();plus[axis]+=step;minus[axis]-=step;const span=plus[axis]-minus[axis];if(!Number.isFinite(span)||!(plus[axis]>point[axis])||!(minus[axis]<point[axis]))throw new RangeError("finite-difference step must produce distinct finite stencil points");return {plus,minus,span};}
+function differenceStencil(point,axis,step){const plus=point.slice(),minus=point.slice();plus[axis]+=step;minus[axis]-=step;const span=plus[axis]-minus[axis],forward=plus[axis]-point[axis],backward=point[axis]-minus[axis];if(!Number.isFinite(span)||!(forward>0)||!(backward>0))throw new RangeError("finite-difference step must produce distinct finite stencil points");return {plus,minus,span,forward,backward};}
 function differenceQuotient(plus,minus,span){const delta=plus-minus,result=Number.isFinite(delta)?delta/span:plus/span-minus/span;if(!Number.isFinite(result))throw new RangeError("finite-difference derivative is non-finite");return result;}
-function partial(fn,x,axis,h=1e-5){const {plus:xp,minus:xm,span}=differenceStencil(x,axis,h);const plus=fn(xp),minus=fn(xm);if(!Number.isFinite(plus)||!Number.isFinite(minus))throw new TypeError("scalar field samples must be finite");return differenceQuotient(plus,minus,span);}
+function weightedStencilDerivative(plus,minus,center,stencil){
+  if(stencil.forward===stencil.backward)return differenceQuotient(plus,minus,stencil.span);
+  const left=differenceQuotient(center,minus,stencil.backward),right=differenceQuotient(plus,center,stencil.forward),value=(stencil.forward/stencil.span)*left+(stencil.backward/stencil.span)*right;
+  if(!Number.isFinite(value))throw new RangeError("finite-difference derivative is non-finite");return value;
+}
+function partial(fn,x,axis,h=1e-5){const stencil=differenceStencil(x,axis,h),plus=fn(stencil.plus),minus=fn(stencil.minus),center=stencil.forward===stencil.backward?undefined:fn(x.slice());if(!Number.isFinite(plus)||!Number.isFinite(minus)||(stencil.forward!==stencil.backward&&!Number.isFinite(center)))throw new TypeError("scalar field samples must be finite");return weightedStencilDerivative(plus,minus,center,stencil);}
 const MAX_COVARIANT_COMPONENTS=65536;
 const MAX_TRANSPORT_INTEGRATION_STEPS=10_000;
 const MAX_CURVATURE_BATCH_WORK=4_000_000;
@@ -28,19 +33,20 @@ export class DifferentialOperators4 {
   constructor(metric=null,{step=1e-5}={}){this.metric=metric;this.step=validateDifferenceStep(step);this.connection=new Connection4(x=>this._g(x),{step:this.step});}
   _g(x){const g=typeof this.metric==="function"?this.metric(x):(this.metric??new Metric4().components);return geometryMetric(g);}
   _mapPoints(x,operation,workPerPoint=1){const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),batchCount=batchShape.reduce((count,size)=>count*size,1),firstIndex=Array(batchShape.length).fill(0);if(typeof workPerPoint==="number"&&batchCount*workPerPoint>MAX_DIFFERENTIAL_BATCH_WORK)throw new RangeError("differential-operator batch exceeds the bounded work limit");const firstPoint=geometryBatchGet(parsed.data,batchShape,firstIndex,batchShape),firstValue=operation(firstPoint),shape=numericTreeShape(firstValue),components=shape.reduce((count,size)=>count*size,1);if(batchCount*components>MAX_COVARIANT_COMPONENTS)throw new RangeError("differential-operator batch exceeds the bounded component limit");if(typeof workPerPoint==="function"&&batchCount*workPerPoint(firstValue,components)>MAX_DIFFERENTIAL_BATCH_WORK)throw new RangeError("differential-operator batch exceeds the bounded work limit");if(!batchShape.length)return firstValue;return geometryBuildBatch(batchShape,index=>{if(index.every((value,axis)=>value===firstIndex[axis]))return firstValue;const result=operation(geometryBatchGet(parsed.data,batchShape,index,batchShape));if(JSON.stringify(numericTreeShape(result))!==JSON.stringify(shape))throw new RangeError("field result shape must remain constant across batch samples");return result;});}
-  partial(fn,x){return this._mapPoints(x,p=>this._jacobianScalar(fn,p),(_value,components)=>3*components);}
+  partial(fn,x){return this._mapPoints(x,p=>this._jacobianScalar(fn,p),(_value,components)=>Math.ceil(13*components/4));}
   _partialScalar(fn,p){return Array.from({length:4},(_,i)=>partial(fn,p,i,this.step));}
-  jacobian(fn,x){return this._mapPoints(x,p=>this._jacobianScalar(fn,p),(_value,components)=>3*components);}
+  jacobian(fn,x){return this._mapPoints(x,p=>this._jacobianScalar(fn,p),(_value,components)=>Math.ceil(13*components/4));}
   _jacobianScalar(fn,p){
-    let shape=null,components=0;
+    let shape=null,components=0,center,hasCenter=false;
     const derivatives=Array.from({length:4},(_,axis)=>{
-      const {plus:plusPoint,minus:minusPoint,span}=differenceStencil(p,axis,this.step);
-      const plus=fn(plusPoint),minus=fn(minusPoint);
+      const stencil=differenceStencil(p,axis,this.step);
+      const plus=fn(stencil.plus),minus=fn(stencil.minus);
       const plusShape=fieldOutputShape(plus),minusShape=fieldOutputShape(minus);
       if(JSON.stringify(plusShape)!==JSON.stringify(minusShape)||(shape!==null&&JSON.stringify(plusShape)!==JSON.stringify(shape)))throw new RangeError("field shape must remain constant in a neighborhood");
-      if(shape===null){shape=plusShape;components=shape.reduce((product,size)=>product*size,1);if(12*components>MAX_COVARIANT_COMPONENTS)throw new RangeError("Jacobian exceeds the bounded finite-difference work limit");}
-      const difference=(a,b)=>Array.isArray(a)?a.map((child,i)=>difference(child,b[i])):differenceQuotient(a,b,span);
-      return difference(plus,minus);
+      if(shape===null){shape=plusShape;components=shape.reduce((product,size)=>product*size,1);if(13*components>MAX_COVARIANT_COMPONENTS)throw new RangeError("Jacobian exceeds the bounded finite-difference work limit");}
+      if(stencil.forward!==stencil.backward&&!hasCenter){center=fn(p.slice());if(JSON.stringify(fieldOutputShape(center))!==JSON.stringify(shape))throw new RangeError("field shape must remain constant in a neighborhood");hasCenter=true;}
+      const difference=(a,b,c)=>Array.isArray(a)?a.map((child,i)=>difference(child,b[i],c?.[i])):weightedStencilDerivative(a,b,c,stencil);
+      return difference(plus,minus,center);
     });
     const out=zeroTensor([...shape,4]);
     eachShapeIndex(shape,indices=>{for(let axis=0;axis<4;axis++)setTensorValue(out,[...indices,axis],tensorValue(derivatives[axis],indices));});
@@ -53,11 +59,11 @@ export class DifferentialOperators4 {
     const value=form(p),shape=tensorShape(value),rank=shape.length,inputComponents=shape.reduce((product,size)=>product*size,1),outputComponents=inputComponents*4;
     if(8*inputComponents+outputComponents>MAX_COVARIANT_COMPONENTS)throw new RangeError("exterior derivative exceeds the bounded finite-difference work limit");
     const derivatives=Array.from({length:4},(_,axis)=>{
-      const {plus:plusPoint,minus:minusPoint,span}=differenceStencil(p,axis,this.step);
-      const plus=form(plusPoint),minus=form(minusPoint);
+      const stencil=differenceStencil(p,axis,this.step);
+      const plus=form(stencil.plus),minus=form(stencil.minus);
       if(JSON.stringify(tensorShape(plus))!==JSON.stringify(shape)||JSON.stringify(tensorShape(minus))!==JSON.stringify(shape))throw new RangeError("form field shape must remain constant in a neighborhood");
-      const difference=(a,b)=>Array.isArray(a)?a.map((child,i)=>difference(child,b[i])):differenceQuotient(a,b,span);
-      return difference(plus,minus);
+      const difference=(a,b,c)=>Array.isArray(a)?a.map((child,i)=>difference(child,b[i],c[i])):weightedStencilDerivative(a,b,c,stencil);
+      return difference(plus,minus,value);
     });
     const out=zeroTensor([4,...shape]);
     eachIndex(rank+1,indices=>{
@@ -92,7 +98,7 @@ export class Connection4 {
   constructor(metric,{step=1e-5}={}){this.metric=metric;this.step=validateDifferenceStep(step);}
   _g(x){const g=this.metric(x);return geometryMetric(g);}
   christoffel(x){const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),components=batchShape.reduce((count,size)=>count*size,1)*64;if(components>MAX_COVARIANT_COMPONENTS)throw new RangeError("Christoffel batch exceeds the component limit");return geometryBuildBatch(batchShape,index=>this._christoffelScalar(geometryBatchGet(parsed.data,batchShape,index,batchShape)));}
-  _christoffelScalar(p){const g=this._g(p),gi=inverse(g),dg=Array.from({length:4},(_,k)=>{const {plus:xp,minus:xm,span}=differenceStencil(p,k,this.step);const a=this._g(xp),b=this._g(xm);return a.map((r,i)=>r.map((v,j)=>differenceQuotient(v,b[i][j],span)));}),out=zeros(4).map(()=>zeros(4));for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)out[a][b][c]+=.5*gi[a][d]*(dg[b][d][c]+dg[c][d][b]-dg[d][b][c]);if(out.some(plane=>plane.some(row=>row.some(value=>!Number.isFinite(value)))))throw new RangeError("Christoffel symbols are non-finite");return out;}
+  _christoffelScalar(p){const g=this._g(p),gi=inverse(g),dg=Array.from({length:4},(_,k)=>{const stencil=differenceStencil(p,k,this.step);const a=this._g(stencil.plus),b=this._g(stencil.minus);return a.map((r,i)=>r.map((v,j)=>weightedStencilDerivative(v,b[i][j],g[i][j],stencil)));}),out=zeros(4).map(()=>zeros(4));for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)out[a][b][c]+=.5*gi[a][d]*(dg[b][d][c]+dg[c][d][b]-dg[d][b][c]);if(out.some(plane=>plane.some(row=>row.some(value=>!Number.isFinite(value)))))throw new RangeError("Christoffel symbols are non-finite");return out;}
   covariantDerivativeVector(field,x){return this.covariantDerivative(field,x,["up"]);}
   covariantDerivative(field,x,indexTypes=["up"]){
     if(!Array.isArray(indexTypes)||Array.from(indexTypes).some(type=>type!=="up"&&type!=="down"))throw new TypeError("indexTypes entries must be 'up' or 'down'");
@@ -107,11 +113,11 @@ export class Connection4 {
   _covariantDerivativeScalar(field,p,indexTypes,shape,value){
     const g=this.christoffel(p),out=zeroTensor([...shape,4]);
     for(let d=0;d<4;d++){
-      const {plus:xp,minus:xm,span}=differenceStencil(p,d,this.step);
-      const plus=field(xp),minus=field(xm);
+      const stencil=differenceStencil(p,d,this.step);
+      const plus=field(stencil.plus),minus=field(stencil.minus);
       if(JSON.stringify(tensorShape(plus))!==JSON.stringify(shape)||JSON.stringify(tensorShape(minus))!==JSON.stringify(shape))throw new RangeError("tensor field shape must remain constant in a neighborhood");
       eachIndex(indexTypes.length,slots=>{
-        let derivative=differenceQuotient(tensorValue(plus,slots),tensorValue(minus,slots),span);
+        let derivative=weightedStencilDerivative(tensorValue(plus,slots),tensorValue(minus,slots),tensorValue(value,slots),stencil);
         for(let axis=0;axis<indexTypes.length;axis++)for(let e=0;e<4;e++){
           const replaced=slots.slice();replaced[axis]=e;
           const connection=indexTypes[axis]==="up"?g[slots[axis]][d][e]:g[e][d][slots[axis]];
@@ -157,9 +163,9 @@ export class Curvature4 {
   _riemannScalar(p){
     const g=this.connection.christoffel(p);
     const dg=Array.from({length:4},(_,d)=>{
-      const {plus:xp,minus:xm,span}=differenceStencil(p,d,this.step);
-      const plus=this.connection.christoffel(xp),minus=this.connection.christoffel(xm);
-      return plus.map((row,i)=>row.map((plane,j)=>plane.map((value,k)=>differenceQuotient(value,minus[i][j][k],span))));
+      const stencil=differenceStencil(p,d,this.step);
+      const plus=this.connection.christoffel(stencil.plus),minus=this.connection.christoffel(stencil.minus);
+      return plus.map((row,i)=>row.map((plane,j)=>plane.map((value,k)=>weightedStencilDerivative(value,minus[i][j][k],g[i][j][k],stencil))));
     });
     const R=zeros(4).map(()=>zeros(4).map(()=>zeros(4).map(()=>Array(4).fill(0))));
     for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++){
@@ -191,14 +197,14 @@ export class Geodesic4 {
     const endpoint=tangent=>new Geodesic4(this.connection,this.initialEvent,tangent).integrate(span,{steps}).at(-1).event.position;
     let tangent=this.initialTangent.slice();
     for(let iteration=0;iteration<=maxIterations;iteration++){
-      const residual=sub(endpoint(tangent),target);
+      const currentEndpoint=endpoint(tangent),residual=sub(currentEndpoint,target);
       if(Math.hypot(...residual)<=tolerance){const result=new Geodesic4(this.connection,new Event4(this.initialEvent,this.eventFrame,this.eventC),tangent).integrate(span,{steps,format});return format==="components"?[...result,tangent.slice()]:result;}
       if(iteration===maxIterations)break;
       const h=1e-5;
       const columns=Array.from({length:4},(_,column)=>{
-        const {plus,minus,span:stencilSpan}=differenceStencil(tangent,column,h);
-        const plusEnd=endpoint(plus),minusEnd=endpoint(minus);
-        return plusEnd.map((value,row)=>differenceQuotient(value,minusEnd[row],stencilSpan));
+        const stencil=differenceStencil(tangent,column,h);
+        const plusEnd=endpoint(stencil.plus),minusEnd=endpoint(stencil.minus);
+        return plusEnd.map((value,row)=>weightedStencilDerivative(value,minusEnd[row],currentEndpoint[row],stencil));
       });
       const jacobian=transpose(columns);
       const jacobianTranspose=transpose(jacobian);

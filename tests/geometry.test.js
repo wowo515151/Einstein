@@ -3,6 +3,27 @@ import assert from "node:assert/strict";
 import {Connection4,Curvature4,DifferentialOperators4,Geodesic4,Metric4,Event4} from "../src/relativity/index.js";
 const flat=()=>new Metric4().components;
 
+test("pointwise derivatives account for unequal representable stencil spacing",()=>{
+  const base=2**53,operators=new DifferentialOperators4(null,{step:3}),point=[base,0,0,0],scalar=p=>(p[0]-base)**2;
+  assert.deepEqual(operators.partial(scalar,point),[0,0,0,0]);
+  const shifted=operators.partial(p=>scalar(p)+2*(p[0]-base),point);assert.ok(Math.abs(shifted[0]-2)<1e-14);assert.deepEqual(shifted.slice(1),[0,0,0]);
+  assert.deepEqual(operators.gradient(scalar,point),[0,0,0,0]);
+  assert.deepEqual(operators.jacobian(p=>[scalar(p),2*(p[0]-base)+p[1]],point),[[0,0,0,0],[2,1,0,0]]);
+  assert.throws(()=>operators.partial(p=>p[0]===base?NaN:scalar(p),point),/finite/);
+});
+test("connection and form derivatives use unequal stencil center values",()=>{
+  const base=2**53,point=[base,0,0,0],square=p=>(p[0]-base)**2,metric=p=>[[-1,0,0,0],[0,1+square(p)/100,0,0],[0,0,1,0],[0,0,0,1]];
+  const connection=new Connection4(metric,{step:3}),gamma=connection.christoffel(point);
+  assert.ok(Math.abs(gamma[1][0][1])<1e-14);
+  const flatConnection=new Connection4(()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],{step:3});
+  const derivative=flatConnection.covariantDerivative(p=>[0,square(p),0,0],point,["up"]);assert.ok(Math.abs(derivative[1][0])<1e-14);
+  const exterior=new DifferentialOperators4(null,{step:3}).exteriorDerivative(p=>[0,square(p),0,0],point);assert.ok(Math.abs(exterior[0][1])<1e-14);
+});
+test("curvature derivatives use the center connection on unequal stencils",()=>{
+  const base=2**53,curvature=new Curvature4(()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],{step:3});
+  curvature.connection={christoffel:p=>{const gamma=Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0)));gamma[1][0][0]=(p[2]-base)**2;return gamma;}};
+  assert.ok(Math.abs(curvature.riemann([0,0,base,0])[1][0][2][0])<1e-14);
+});
 test("curvature calculations reject non-finite products and contractions",()=>{
   const point=[0,0,0,0],flat=()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],tensor4=()=>Array.from({length:4},()=>Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0))));
   const curvature=new Curvature4(flat),gamma=Array.from({length:4},()=>Array.from({length:4},()=>Array(4).fill(0)));
@@ -168,10 +189,10 @@ test("divergence and d'Alembertian match their metric formulas",()=>{
   assert.ok(Math.abs(box-4)<1e-6);
 });
 test("jacobian evaluates each central-difference side once and preserves row/column order",()=>{
-  let calls=0;
+  const samples=[];
   const ops=new DifferentialOperators4(flat,{step:1e-5});
-  const jacobian=ops.jacobian(x=>{calls++;return [2*x[0]+3*x[1],-x[1]+4*x[3],x[2]*x[2],x[0]-x[3]];},[1,2,3,4]);
-  assert.equal(calls,8);
+  const jacobian=ops.jacobian(x=>{samples.push(x);return [2*x[0]+3*x[1],-x[1]+4*x[3],x[2]*x[2],x[0]-x[3]];},[1,2,3,4]);
+  assert.equal(samples.length,9);assert.equal(samples.filter(x=>x.every((v,i)=>v===[1,2,3,4][i])).length,1);
   assert.ok(Math.abs(jacobian[0][0]-2)<1e-8);assert.ok(Math.abs(jacobian[0][1]-3)<1e-8);
   assert.ok(Math.abs(jacobian[1][1]+1)<1e-8);assert.ok(Math.abs(jacobian[1][3]-4)<1e-8);
   assert.ok(Math.abs(jacobian[2][2]-6)<1e-8);assert.ok(Math.abs(jacobian[3][0]-1)<1e-8);

@@ -54,3 +54,5 @@ Metric callbacks used by geometry operations must return one 4×4 metric for eac
 Gradient, divergence, exterior derivative and d’Alembertian reject non-finite final results. Extreme-scale cancellation can still lose a representable result; rescale coordinates and compare converged calculations.
 
 Riemann, Ricci, Einstein and Kretschmann calculations reject non-finite final components or contractions. At extreme scales, intermediate overflow can still prevent a representable final result; rescaling and convergence checks remain necessary.
+
+Finite-difference stencils use a weighted three-point derivative when floating-point rounding makes the two offsets unequal. This covers pointwise derivatives, connection and curvature derivatives, exterior derivatives, and the boundary solver's endpoint Jacobian. A pointwise Jacobian takes one additional center sample when needed and its work limit accounts for it; the other paths reuse their existing center value. Intermediate overflow can still prevent a representable derivative. This does not replace convergence checks or automatic differentiation.
