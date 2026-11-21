@@ -304,12 +304,20 @@ export class RetardedField {
   _retardedTimeScalar(x){
     const t=x[0]/this.c,position=x.slice(1);if(!Number.isFinite(t))throw new RangeError("observation time is non-finite");
     const now=vector(this.sourceWorldline(t),3,"source position"),distance=norm(sub(position,now));
-    const positionScale=Math.max(1,norm(position),norm(now)),coincident=distance<=64*Number.EPSILON*positionScale;
+    const positionScale=Math.max(norm(position),norm(now)),coincident=distance===0||distance<=64*Number.EPSILON*positionScale;
     const span=distance/(this.c-this.maxSpeed)+this.tolerance;
     let lo=t-span,hi=t;if(!Number.isFinite(distance)||!Number.isFinite(positionScale)||!Number.isFinite(lo)||!Number.isFinite(span))throw new RangeError("retarded-time bracket is non-finite");
     for(let i=0;i<this.maxIterations;i++){
       const mid=lo+(hi-lo)/2,source=vector(this.sourceWorldline(mid),3,"source position"),f=this.c*(t-mid)-norm(sub(position,source));
       if(!Number.isFinite(f))throw new RangeError("retarded-time residual is non-finite");
+      if(f===0)return coincident?t:mid;
+      if(mid===lo||mid===hi){
+        if(hi-lo<=this.tolerance)return coincident?t:mid;
+        const other=mid===lo?hi:lo,otherSource=vector(this.sourceWorldline(other),3,"source position"),otherResidual=this.c*(t-other)-norm(sub(position,otherSource));
+        if(!Number.isFinite(otherResidual))throw new RangeError("retarded-time residual is non-finite");
+        if(otherResidual===0)return coincident?t:other;
+        throw new RangeError("retarded-time bracket cannot be refined at this floating-point scale");
+      }
       if(f>0)lo=mid;else hi=mid;
       if(hi-lo<=this.tolerance)return coincident?t:lo+(hi-lo)/2;
     }
@@ -320,11 +328,11 @@ export class RetardedField {
   }
   _retardedPotentialScalar(x){
     const tr=this._retardedTimeScalar(x),position=x.slice(1),source=vector(this.sourceWorldline(tr),3,"source position"),velocity=vector(this.sourceVelocity(tr),3,"source velocity"),speed=norm(velocity),radius=norm(sub(position,source));
-    const positionScale=Math.max(1,norm(position));
+    const positionScale=Math.max(norm(position),norm(source));
     if(speed>=this.c)throw new RangeError("source velocity must remain strictly subluminal");
     if(speed>this.maxSpeed+64*Number.EPSILON*this.c)throw new RangeError("source velocity exceeded the declared maxSpeed bound");
-    if(radius<=64*Number.EPSILON*positionScale)throw new RangeError("retarded potential is singular on the source worldline");
-    const beta=velocity.map(component=>component/this.c),direction=scale(sub(position,source),1/radius),denominator=radius*(1-dot(direction,beta));
+    if(radius===0||radius<=64*Number.EPSILON*positionScale)throw new RangeError("retarded potential is singular on or too close to the source worldline at this coordinate scale");
+    const beta=velocity.map(component=>component/this.c),direction=sub(position,source).map(component=>component/radius),denominator=radius*(1-dot(direction,beta));
     if(!Number.isFinite(denominator)||denominator<=0)throw new RangeError("invalid source velocity produced a nonpositive or non-finite retarded denominator");
     const divisor=4*Math.PI*this.epsilon0*denominator;
     const phi=Number.isFinite(divisor)&&divisor>=2**-1022?this.charge/divisor:this.charge===0?0:Math.sign(this.charge)*Math.exp(Math.log(Math.abs(this.charge))-Math.log(4*Math.PI)-Math.log(this.epsilon0)-Math.log(denominator));

@@ -125,6 +125,20 @@ test("four-momentum broadcasts mass and velocity batches through observables and
   for(let i=0;i<2;i++)for(let j=0;j<2;j++)assert.deepEqual(boosted.components[i][j],new LorentzTransform(matrices[i][0]).applyVector(p.components[i][j]).components);
   assert.throws(()=>FourMomentum.fromMassVelocity(-1,[0,0,0],1),/nonnegative/);
 });
+test("retarded-time bisection detects unrefinable time brackets",()=>{
+  const stationary=()=>[0,0,0],field=new RetardedField(stationary,stationary,1,0,{c:1,epsilon0:1,tolerance:1e-12});
+  assert.equal(field.retardedTime([1e16,4,0,0]),1e16-4);
+  assert.throws(()=>field.retardedTime([1e16,1,0,0]),/cannot be refined/);
+});
+test("retarded fields resolve small nonzero separations near the origin",()=>{
+  const stationary=()=>[0,0,0];
+  for(const distance of [1e-15,1e-200]){
+    const field=new RetardedField(stationary,stationary,1,0,{c:1,epsilon0:1,tolerance:distance*1e-6});
+    const event=[0,distance,0,0],root=field.retardedTime(event),potential=field.retardedPotential(event);
+    assert.ok(Math.abs(root/distance+1)<1e-6);
+    assert.ok(Math.abs(potential[0]*distance*4*Math.PI-1)<1e-12);
+  }
+});
 test("four-current construction preserves charge and current components",()=>{
   const j=FourCurrent.fromChargeCurrent(2,[3,4,5],{c:10});assert.equal(j.chargeDensity(),2);assert.deepEqual(j.spatialCurrent(),[3,4,5]);
   assert.ok(j.transform(LorentzTransform.boost([.2,0,0])).components.every(Number.isFinite));
