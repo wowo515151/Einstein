@@ -332,5 +332,7 @@ test("ODE worldline exposes initial-event and parameter sensitivity histories",(
   const [times,events,parameterJacobian]=worldline.integrateForward([0,1],{...options,withRespectTo:"parameters"});
   assert.equal(times.length,49);assert.ok(Math.abs(events.at(-1)[0]-target)<1e-8);assert.ok(Math.abs(parameterJacobian.at(-1)[0][0]-target)<1e-8);
   const [,stateEvents,stateJacobian]=worldline.integrateForward([0,1],options);assert.ok(Math.abs(stateEvents.at(-1)[0]-target)<1e-8);assert.ok(Math.abs(stateJacobian.at(-1)[0][0]-Math.exp(.3))<1e-8);
-  assert.throws(()=>new ODEWorldline([[2,0,0,0],[3,0,0,0]],velocity).integrateForward([0,1],options),/initial event/);
+  const initial=[[[2,0,0,0],[3,0,0,0]]],batch=new ODEWorldline(initial,velocity).integrateForward([0,1],{...options,withRespectTo:"parameters"});
+  for(let i=0;i<2;i++){const scalar=new ODEWorldline(initial[0][i],velocity).integrateForward([0,1],{...options,withRespectTo:"parameters"});assert.deepEqual(batch[1].at(-1)[0][i],scalar[1].at(-1));assert.deepEqual(batch[2].at(-1)[0][i],scalar[2].at(-1));}
+  let calls=0;const many=Array.from({length:3000},()=>[1,0,0,0]);assert.throws(()=>new ODEWorldline(many,()=>{calls++;return [0,0,0,0];}).integrateForward([0,1]),/component or work limit/);assert.equal(calls,0);
 });

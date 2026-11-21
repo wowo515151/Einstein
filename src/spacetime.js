@@ -216,8 +216,18 @@ export class ODEWorldline {
   constructor(initialEvent,fourVelocity){this.initialEvent=initialEvent instanceof Event4?initialEvent:new Event4(initialEvent);if(typeof fourVelocity!=="function")throw new TypeError("fourVelocity must be a function of (parameter, event)");this.fourVelocity=fourVelocity;}
   integrate(parameterSpan,{steps=100}={}){const span=vector(parameterSpan,2,"parameter span"),rows=integrateRK4(this.fourVelocity,this.initialEvent.position,span[0],span[1],steps);return [rows.map(([parameter])=>parameter),rows.map(([,event])=>event)];}
   integrateForward(parameterSpan,{steps=100,parameters=[],withRespectTo="initialState"}={}){
-    const span=vector(parameterSpan,2,"parameter span"),initial=vector(this.initialEvent.position,4,"initial event"),rows=integrateRK4Forward(this.fourVelocity,initial,span[0],span[1],steps,{parameters,withRespectTo});
-    return [rows.map(row=>row.parameter),rows.map(row=>row.value),rows.map(row=>row.jacobian)];
+    const span=vector(parameterSpan,2,"parameter span"),initial=parseNumericTree(this.initialEvent.position,"initial event",[4]),batchShape=initial.batchShape;
+    if(!batchShape.length){const rows=integrateRK4Forward(this.fourVelocity,initial.data,span[0],span[1],steps,{parameters,withRespectTo});return [rows.map(row=>row.parameter),rows.map(row=>row.value),rows.map(row=>row.jacobian)];}
+    if((!Array.isArray(parameters)&&!(ArrayBuffer.isView(parameters)&&!(parameters instanceof DataView)))||parameters.length>32)throw new RangeError("parameters must contain at most 32 components");
+    if(!["initialState","parameters"].includes(withRespectTo))throw new TypeError("withRespectTo must be initialState or parameters");
+    if(withRespectTo==="parameters"&&parameters.length===0)throw new RangeError("parameter sensitivity requires at least one parameter");
+    if(!Number.isInteger(steps)||steps<1||steps>MAX_INTEGRATION_STEPS)throw new RangeError(`steps must be an integer from 1 to ${MAX_INTEGRATION_STEPS}`);
+    const count=product(batchShape),columns=withRespectTo==="parameters"?parameters.length:4,directions=4+(withRespectTo==="parameters"?parameters.length:0);
+    if(count*(steps+1)*(4+4*columns)>MAX_INTEGRATION_COMPONENTS||count*4*steps*16*directions>20_000_000)throw new RangeError("forward worldline batch exceeds the bounded component or work limit");
+    const results=buildSpacetimeBatch(batchShape,index=>integrateRK4Forward(this.fourVelocity,spacetimeBatchGet(initial.data,batchShape,index,batchShape),span[0],span[1],steps,{parameters,withRespectTo}));
+    const first=spacetimeBatchGet(results,batchShape,Array(batchShape.length).fill(0),batchShape);
+    const project=(node,depth,frame,key)=>depth===batchShape.length?node[frame][key]:node.map(child=>project(child,depth+1,frame,key));
+    return [first.map(row=>row.parameter),first.map((_,frame)=>project(results,0,frame,"value")),first.map((_,frame)=>project(results,0,frame,"jacobian"))];
   }
 }
 
