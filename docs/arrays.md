@@ -37,3 +37,5 @@ These named exports are available from `src/relativity/index.js`. They are low-l
 | `inverse(a,tolerance)` | Inverse via pivoted elimination; `tolerance` defaults to zero. Singular pivots or non-finite inverse results throw. |
 
 These raw helpers do not generally validate matching dimensions or prevent non-finite intermediate results. `finiteNumber`, `vector`, `matrix`, and `minkowskiDot` perform the validation described above. Matrix inversion and determinant calculations remain sensitive to conditioning; see [numerical limits](limits.md).
+
+`minkowskiDot` uses exact accumulation of the supplied Float64 values when products or their sum overflow, underflow, or become subnormal. This can recover a finite result when extreme terms cancel. A result outside the Float64 range is returned as signed infinity; ordinary finite intermediate calculations remain subject to floating-point cancellation.

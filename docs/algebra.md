@@ -12,7 +12,7 @@ Construct with four finite components `(ct,x,y,z)` or a rectangular batch ending
 | --- | --- |
 | `new Vector4(components)` | A vector value; `components` ends in four coordinates. |
 | `v.add(other)`, `v.subtract(other)`, `v.scale(factor)` | A new `Vector4`; compatible leading batches broadcast. |
-| `v.dot(other, metric)`, `v.normSquared(metric)` | A number or batch of numbers. The metric argument is optional. |
+| `v.dot(other, metric)`, `v.normSquared(metric)` | A number or batch of numbers. The metric argument is optional. Both diagonal and general metrics use an exact Float64-input fallback for extreme intermediate products or non-finite results, as described for diagonal products in [array helpers](arrays.md); ordinary finite calculations remain subject to cancellation. |
 | `v.causalType(metric, atol)`, `v.causalName(metric, atol)` | Numeric causal codes or names, preserving batches. Both arguments are optional. |
 | `v.normalizeTimelike(metric, atol)`, `v.normalizeSpacelike(metric, atol)` | A new `Vector4`, or an error when the requested normalization is invalid. |
 | `v.outer(other)`, `v.wedge(other)` | A `Tensor4` or `Bivector4`, respectively. |

@@ -61,7 +61,7 @@ test("vector normalization scales overflowing squared norms",()=>{
   assert.deepEqual(new Vector4([[2,0,0,0],[1e200,0,0,0]]).normalizeTimelike().components,[[1,0,0,0],[1,0,0,0]]);
   const metric=new Metric4([[-4,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]);
   assert.deepEqual(new Vector4([1e200,0,0,0]).normalizeTimelike(metric).components,[.5,0,0,0]);
-  assert.throws(()=>new Vector4([1e200,1e200,0,0]).normalizeTimelike(),/indeterminate/);
+  assert.throws(()=>new Vector4([1e200,1e200,0,0]).normalizeTimelike(),/not timelike/);
 });
 test("vector normalization recovers underflowed squared norms at zero tolerance",()=>{
   const metric=new Metric4();
@@ -154,7 +154,8 @@ test("Minkowski norm classifies timelike, null, and spacelike vectors",()=>{
   assert.equal(new Vector4([1,2,0,0]).causalName(),"spacelike");
   assert.equal(new Vector4([1e150,9e149,0,0]).causalType(),Vector4.CAUSAL_TIMELIKE);
   assert.throws(()=>new Vector4([1,0,0,0]).causalType(undefined,-1),RangeError);
-  assert.throws(()=>new Vector4([1e308,1e308,0,0]).causalType(),TypeError);
+  assert.equal(new Vector4([1e308,1e308,0,0]).causalType(),Vector4.CAUSAL_NULL);
+  assert.throws(()=>new Vector4([1e308,0,0,0]).causalType(),TypeError);
 });
 test("Minkowski dot broadcasts bounded vector batches",()=>{
   assert.deepEqual(minkowskiDot([[1,2,3,4],[2,0,0,1]],[2,1,0,0]),[0,-4]);
@@ -268,6 +269,35 @@ test("bivector batches broadcast through wedge, contraction, dual, transform, an
   const cyclic=[];cyclic.push(cyclic);assert.throws(()=>new Bivector4(cyclic),/cycles/);
 });
 test("Minkowski dot accepts plain arrays",()=>assert.equal(minkowskiDot([2,1,0,0],[3,0,0,0]),-6));
+test("Minkowski dot recovers extreme products and preserves overflow signaling",()=>{
+  assert.equal(minkowskiDot([1e308,1e308,1,0],[1e308,1e308,1,0]),1);
+  assert.deepEqual(minkowskiDot([[1e308,1e308,1,0],[0,0,2,0]],[1e308,1e308,1,0]),[1,2]);
+  assert.equal(minkowskiDot([1e308,1e308,1,0],[1e308,1e308,1,0],[-2,2,3,1]),3);
+  assert.ok(Math.abs(minkowskiDot([1e-100,0,0,0],[1e100,0,0,0],[1e-300,1,1,1])/1e-300-1)<1e-15);
+  assert.ok(Math.abs(minkowskiDot([1e200,0,0,0],[1e-200,0,0,0],[1e200,1,1,1])/1e200-1)<1e-15);
+  assert.equal(minkowskiDot([0,Number.MIN_VALUE,Number.MIN_VALUE,Number.MIN_VALUE],[0,.75,.75,.75]),2*Number.MIN_VALUE);
+  assert.equal(minkowskiDot([0,1e308,0,0],[0,1e308,0,0]),Infinity);
+});
+test("Vector4 diagonal-metric products recover representable extreme cancellation",()=>{
+  const vector=new Vector4([1e308,1e308,1,0]);
+  assert.equal(vector.dot(vector),1);
+  assert.equal(vector.normSquared(),1);
+  assert.equal(vector.causalType(),Vector4.CAUSAL_SPACELIKE);
+  const diagonal=entries=>entries.map((value,i)=>entries.map((_,j)=>i===j?value:0));
+  const metrics=new Metric4([diagonal([-1,1,1,1]),diagonal([-2,2,3,1])]);
+  assert.deepEqual(vector.dot(vector,metrics),[1,3]);
+  assert.equal(new Vector4([0,1e308,0,0]).dot(new Vector4([0,1e308,0,0])),Infinity);
+});
+test("Vector4 non-diagonal metric products recover extreme cancellations and underflow",()=>{
+  const matrix=[[-1,.5,0,0],[.5,0,0,0],[0,0,1,0],[0,0,0,1]],metric=new Metric4(matrix);
+  const vector=new Vector4([1e308,1e308,1,0]);
+  assert.equal(vector.dot(vector,metric),1);
+  assert.equal(metric.dot(vector,vector),1);
+  const batch=new Metric4([matrix,[[-2,1,0,0],[1,0,0,0],[0,0,3,0],[0,0,0,1]]]);
+  assert.deepEqual(vector.normSquared(batch),[1,3]);
+  const value=new Vector4([0,1e100,0,0]).dot(new Vector4([Number.MIN_VALUE,0,0,0]),metric);
+  assert.ok(Math.abs(value/(Number.MIN_VALUE*1e100*.5)-1)<1e-15);
+});
 test("Vector4 shape and Covector4 broadcast algebra, causal classification, and index maps",()=>{
   const values=new Vector4([[2,1,0,0],[0,2,0,0]]),offset=new Vector4([1,0,0,0]);
   assert.deepEqual(values.shape,[2,4]);assert.deepEqual(offset.shape,[4]);assert.ok(Object.isFrozen(values.shape));

@@ -3,6 +3,19 @@ import assert from "node:assert/strict";
 import {Connection4,Curvature4,DifferentialOperators4,Geodesic4,Metric4,Event4} from "../src/relativity/index.js";
 const flat=()=>new Metric4().components;
 
+test("exterior derivative of a three-form has the analytic four-form orientation",()=>{
+  const parity=indices=>{
+    if(new Set(indices).size!==indices.length)return 0;
+    let inversions=0;
+    for(let i=0;i<indices.length;i++)for(let j=i+1;j<indices.length;j++)if(indices[i]>indices[j])inversions++;
+    return inversions%2?-1:1;
+  };
+  const form=x=>Array.from({length:4},(_,i)=>Array.from({length:4},(_,j)=>Array.from({length:4},(_,k)=>[i,j,k].includes(0)?0:parity([i,j,k])*x[0])));
+  const derivative=new DifferentialOperators4(null,{step:1e-5}).exteriorDerivative(form,[.3,.2,.1,0]);
+  for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)
+    assert.ok(Math.abs(derivative[a][b][c][d]-parity([a,b,c,d]))<1e-9);
+});
+
 test("flat metric has zero connection and curvature",()=>{
   const conn=new Connection4(flat),gamma=conn.christoffel([0,0,0,0]);
   assert.ok(gamma.flat(2).every(x=>Math.abs(x)<1e-12));

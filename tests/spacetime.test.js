@@ -84,7 +84,9 @@ test("spacetime intervals use scale-aware tolerance and event constants propagat
   const nearlyNull=new SpacetimeInterval([1e6,1e6+1e-7,0,0],{atol:1e-10});
   assert.equal(nearlyNull.isNull(),true);assert.throws(()=>nearlyNull.properTime(),RangeError);
   assert.throws(()=>new SpacetimeInterval([0,0,0,0],{c:0}),RangeError);
-  assert.throws(()=>new SpacetimeInterval([1e308,1e308,0,0]),RangeError);
+  const extremeNull=new SpacetimeInterval([1e308,1e308,0,0]);
+  assert.equal(extremeNull.squared,0);
+  assert.throws(()=>extremeNull.isNull(),/classification scale is non-finite/);
   assert.throws(()=>new Event4([0,0,0,0],null,Number.NaN),RangeError);
   assert.throws(()=>new Event4([0,0,0,0]).causalRelation(new Event4([1e308,1e308,0,0])),RangeError);
 });

@@ -2,6 +2,20 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {C,Vector4,Covector4,Tensor4,FourVelocity,FourMomentum,FourCurrent,EMFieldTensor,MaxwellEquations,RetardedField,LorentzTransform,RelativityContext,Metric4} from "../src/relativity/index.js";
 
+test("Maxwell vacuum plane wave converges under grid refinement",()=>{
+  // E_x=cos(2π(y-t)), B_z=-E_x, with B sampled half a cell ahead.
+  function error(n){
+    const electric=Array.from({length:2},()=>Array.from({length:n},(_,j)=>Array.from({length:2},()=>[Math.cos(2*Math.PI*j/n),0,0])));
+    const magnetic=Array.from({length:2},()=>Array.from({length:n},(_,j)=>Array.from({length:2},()=>[0,0,-Math.cos(2*Math.PI*(j+.5)/n)])));
+    const [,history]=new MaxwellEquations({c:1,epsilon0:1}).evolve(electric,magnetic,{spacing:[1,1/n,1],dt:.25/n,steps:2*n});
+    const last=history.at(-1);
+    return Math.sqrt(Array.from({length:n},(_,j)=>(last[0][j][0][0]-Math.cos(2*Math.PI*(j/n-.5)))**2).reduce((a,b)=>a+b,0)/n);
+  }
+  const coarse=error(8),medium=error(16),fine=error(32);
+  assert.ok(coarse<.06 && fine<.004, `wave errors: ${coarse}, ${medium}, ${fine}`);
+  assert.ok(coarse/medium>3.8 && medium/fine>3.8, `refinement ratios: ${coarse/medium}, ${medium/fine}`);
+});
+
 test("Maxwell evolution and residuals reject a missing grid spacing",()=>{
   const grid=Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[0,0,0])));
   const solver=new MaxwellEquations({c:1,epsilon0:1}),spacing=[1,1,1];delete spacing[1];
