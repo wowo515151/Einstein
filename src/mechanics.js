@@ -139,6 +139,16 @@ export class MaxwellEquations {
   }
   /** Interpolate staggered fields to charge nodes at the electric sample time. */
   collocateFields(electric,magneticBefore,magneticAfter){
+    const eShape=shapeOf(electric),beforeShape=shapeOf(magneticBefore),afterShape=shapeOf(magneticAfter);
+    if(eShape.length>4){
+      const batchShape=eShape.slice(0,-4),spatial=eShape.slice(-4,-1),cells=validateCellShape(spatial,3),count=shapeProduct(batchShape);
+      if(eShape.at(-1)!==3||JSON.stringify(eShape)!==JSON.stringify(beforeShape)||JSON.stringify(eShape)!==JSON.stringify(afterShape))throw new RangeError("collocation grids must have matching (...,Nx,Ny,Nz,3) shapes");
+      if(spatial.some(size=>size<2))throw new RangeError("each spatial grid dimension must have at least 2 points");
+      if(count*cells*6>MAX_FIELD_HISTORY_COMPONENTS)throw new RangeError("collocation batch exceeds the bounded output-component limit");
+      validateNestedShape(electric,eShape);validateNestedShape(magneticBefore,eShape);validateNestedShape(magneticAfter,eShape);
+      const result=nestedFrom(batchShape,index=>this.collocateFields(prefixSlice(electric,index),prefixSlice(magneticBefore,index),prefixSlice(magneticAfter,index)));
+      return {electric:mapBatches(result,batchShape.length,value=>value.electric),magnetic:mapBatches(result,batchShape.length,value=>value.magnetic)};
+    }
     const e=grid(electric),before=grid(magneticBefore),after=grid(magneticAfter);sameGrid(e,before);sameGrid(e,after);
     const shape=e.shape;if(shape.some(size=>size<2))throw new RangeError("each spatial grid dimension must have at least 2 points");
     const sample=(field,index,component)=>field.values[(index[0]*shape[1]+index[1])*shape[2]+index[2]][component];

@@ -639,3 +639,12 @@ test("Maxwell collocation aligns staggered fields in space and time",()=>{
   const constants=make(()=>[1e308,-1e308,1e308]),same=solver.collocateFields(constants,constants,constants);assert.deepEqual(same.electric[0][0][0],[1e308,-1e308,1e308]);assert.deepEqual(same.magnetic[0][0][0],[1e308,-1e308,1e308]);
   assert.throws(()=>solver.collocateFields(e,b(0),[[[[0,0,0]]]]),/grid dimensions|at least 2/);
 });
+
+
+test("Maxwell collocation preserves bounded multidimensional batches",()=>{
+  const solver=new MaxwellEquations({c:1,epsilon0:1}),make=offset=>Array.from({length:2},(_,i)=>Array.from({length:2},(_,j)=>Array.from({length:2},(_,k)=>[i+offset,j+offset,k+offset])));
+  const e=[[make(0),make(1)],[make(2),make(3)]],before=[[make(4),make(5)],[make(6),make(7)]],after=[[make(8),make(9)],[make(10),make(11)]],result=solver.collocateFields(e,before,after);
+  for(let i=0;i<2;i++)for(let j=0;j<2;j++){const scalar=solver.collocateFields(e[i][j],before[i][j],after[i][j]);assert.deepEqual(result.electric[i][j],scalar.electric);assert.deepEqual(result.magnetic[i][j],scalar.magnetic);}
+  assert.throws(()=>solver.collocateFields(e,before,[after[0]]),/matching/);
+  const excessive=Array(20834).fill(make(0));assert.throws(()=>solver.collocateFields(excessive,excessive,excessive),/output-component limit/);
+});
