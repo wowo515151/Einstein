@@ -215,6 +215,10 @@ export function integrateRK4Forward4(rhs,initialState,start,end,steps){
 export class ODEWorldline {
   constructor(initialEvent,fourVelocity){this.initialEvent=initialEvent instanceof Event4?initialEvent:new Event4(initialEvent);if(typeof fourVelocity!=="function")throw new TypeError("fourVelocity must be a function of (parameter, event)");this.fourVelocity=fourVelocity;}
   integrate(parameterSpan,{steps=100}={}){const span=vector(parameterSpan,2,"parameter span"),rows=integrateRK4(this.fourVelocity,this.initialEvent.position,span[0],span[1],steps);return [rows.map(([parameter])=>parameter),rows.map(([,event])=>event)];}
+  integrateForward(parameterSpan,{steps=100,parameters=[],withRespectTo="initialState"}={}){
+    const span=vector(parameterSpan,2,"parameter span"),initial=vector(this.initialEvent.position,4,"initial event"),rows=integrateRK4Forward(this.fourVelocity,initial,span[0],span[1],steps,{parameters,withRespectTo});
+    return [rows.map(row=>row.parameter),rows.map(row=>row.value),rows.map(row=>row.jacobian)];
+  }
 }
 
 export class InertialFrame {

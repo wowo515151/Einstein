@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Dual4,Jet4,forwardJacobian4,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward} from "../src/relativity/index.js";
+import {Dual4,Jet4,forwardJacobian4,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward,ODEWorldline} from "../src/relativity/index.js";
 
 const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(3).divide(x[3].pow(2).add(1)));
 function expected([t,x,y,z]){const denominator=1+z*z;return [Math.cos(t)*Math.exp(x),Math.sin(t)*Math.exp(x),3*y*y/denominator,-2*z*y**3/denominator**2];}
@@ -324,4 +324,13 @@ test("forward ODE differentiates explicit parameters across dual groups",()=>{
   const initial=integrateRK4Forward(rhs,[2],0,2,64,{parameters}).at(-1);assert.ok(Math.abs(initial.jacobian[0][0]-Math.exp(.6))<1e-8);
   assert.throws(()=>integrateRK4Forward(rhs,[2],0,1,4,{withRespectTo:"parameters"}),/at least one parameter/);
   assert.throws(()=>integrateRK4Forward(rhs,[2],0,1,4,{parameters,withRespectTo:"bad"}),/withRespectTo/);
+});
+
+
+test("ODE worldline exposes initial-event and parameter sensitivity histories",()=>{
+  const velocity=(_parameter,x,p)=>[x[0].multiply(p[0]),0,0,0],worldline=new ODEWorldline([2,0,0,0],velocity),options={steps:48,parameters:[.3]},target=2*Math.exp(.3);
+  const [times,events,parameterJacobian]=worldline.integrateForward([0,1],{...options,withRespectTo:"parameters"});
+  assert.equal(times.length,49);assert.ok(Math.abs(events.at(-1)[0]-target)<1e-8);assert.ok(Math.abs(parameterJacobian.at(-1)[0][0]-target)<1e-8);
+  const [,stateEvents,stateJacobian]=worldline.integrateForward([0,1],options);assert.ok(Math.abs(stateEvents.at(-1)[0]-target)<1e-8);assert.ok(Math.abs(stateJacobian.at(-1)[0][0]-Math.exp(.3))<1e-8);
+  assert.throws(()=>new ODEWorldline([[2,0,0,0],[3,0,0,0]],velocity).integrateForward([0,1],options),/initial event/);
 });
