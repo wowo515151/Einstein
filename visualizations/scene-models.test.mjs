@@ -332,6 +332,18 @@ test("aberration directions are derived from the library Lorentz boost", () => {
   assert.ok(Math.abs(sample.z - boosted[3] / boosted[0]) < 1e-12);
   assert.ok(Math.abs(Math.hypot(sample.x, sample.y, sample.z) - 1) < 1e-12);
 });
+test("aberration star field follows the closed-form angular transformation",()=>{
+  for(const beta of [0,.2,.6,.95]){
+    const rows=buildSceneData("aberration",{beta}),gamma=1/Math.sqrt(1-beta*beta);
+    assert.equal(rows.length,140);
+    for(let i=0;i<rows.length;i++){
+      const y=1-2*(i+.5)/140,phi=Math.PI*(1+Math.sqrt(5))*i,r=Math.sqrt(1-y*y),x=r*Math.cos(phi),z=r*Math.sin(phi),denominator=1-beta*x;
+      const expected=[(x-beta)/denominator,y/(gamma*denominator),z/(gamma*denominator)];
+      for(let axis=0;axis<3;axis++)assert.ok(Math.abs([rows[i].x,rows[i].y,rows[i].z][axis]-expected[axis])<1e-12,`direction mismatch at beta ${beta}, star ${i}`);
+    }
+  }
+});
+
 test("velocity addition in the aberration scene composes four-velocities through Lorentz transforms", () => {
   for (const [first, relative] of [[0, 0], [.2, .4], [.6, .6], [-.35, .5]]) {
     const expected = (first + relative) / (1 + first * relative), actual = composeCollinearVelocities(first, relative);
