@@ -199,8 +199,11 @@ export class MaxwellEquations {
     for(let n=0;n<steps;n++){
       const curlB=curlDirected(B,delta,"backward");
       const c2=this.c*this.c;
-      if(Number.isFinite(c2)&&c2>=2**-1022&&Number.isFinite(1/this.epsilon0))E=addVectorGrids(E,scaleGrid(subtractVectorGrids(scaleGrid(curlB,c2),source.current,1/this.epsilon0),dt));
-      else E=addVectorGrids(E,subtractVectorGrids(scaleGridSpeedSquared(curlB,this.c,dt),scaleGridRatio(source.current,dt,this.epsilon0)));
+      let next;
+      if(Number.isFinite(c2)&&c2>=2**-1022&&Number.isFinite(1/this.epsilon0))next=addVectorGrids(E,scaleGrid(subtractVectorGrids(scaleGrid(curlB,c2),source.current,1/this.epsilon0),dt));
+      if(!next||next.values.some(row=>row.some(value=>!Number.isFinite(value))))next=addVectorGrids(E,subtractVectorGrids(scaleGridSpeedSquared(curlB,this.c,dt),scaleGridRatio(source.current,dt,this.epsilon0)));
+      if(next.values.some(row=>row.some(value=>!Number.isFinite(value))))throw new RangeError("Maxwell electric field update is non-finite");
+      E=next;
       electricHistory.push(ungrid(E));
       if(n+1<steps){B=subtractVectorGrids(B,scaleGrid(curlDirected(E,delta,"forward"),dt));magneticHistory.push(ungrid(B));}
     }

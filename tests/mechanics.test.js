@@ -86,6 +86,13 @@ test("Maxwell current coupling survives an unrepresentable inverse permittivity"
   assert.ok(Math.abs(E[1][0][0][0][0]+.1)<1e-12);
   assert.ok(Math.abs(solver.maxwellResiduals(E,B,{...options,current}).ampere[0][0][0][0][0])<1e-12);
 });
+test("Maxwell evolution scales a representable current update before overflow",()=>{
+  const grid=()=>Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[0,0,0])));
+  const current=()=>Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[1e308,0,0])));
+  const [,electric]=new MaxwellEquations({c:1,epsilon0:.1}).evolve(grid(),grid(),{current:current(),spacing:[1,1,1],dt:.01,steps:1});
+  for(const plane of electric[1])for(const row of plane)for(const cell of row){assert.ok(Number.isFinite(cell[0]));assert.ok(Math.abs(cell[0]/-1e307-1)<1e-14);assert.equal(cell[1],0);assert.equal(cell[2],0);}
+  assert.throws(()=>new MaxwellEquations({c:1,epsilon0:.01}).evolve(grid(),grid(),{current:current(),spacing:[1,1,1],dt:.1,steps:1}),/non-finite/);
+});
 test("Maxwell Gauss residual preserves subnormal charge continuity",()=>{
   const epsilon0=Number.MIN_VALUE,grid=Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[0,0,0])));
   const current=Array.from({length:2},()=>Array.from({length:2},(_,j)=>Array.from({length:2},()=>[0,j*epsilon0,0])));
