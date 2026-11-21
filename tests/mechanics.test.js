@@ -661,3 +661,14 @@ test("collocated evolved Maxwell plane wave converges to the analytic field",()=
   const coarse=error(8),medium=error(16),fine=error(32);
   assert.ok(fine<.005,`fine wave error: ${fine}`);assert.ok(coarse/medium>3.8&&medium/fine>3.8,`refinement ratios: ${coarse/medium}, ${medium/fine}`);
 });
+
+
+test("Maxwell history collocation aligns each interior frame, including batches",()=>{
+  const solver=new MaxwellEquations({c:1,epsilon0:1}),grid=value=>Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[value,0,0]))),e=[grid(1),grid(2)],b=[grid(0),grid(0)];
+  const [,history,,halfHistory]=solver.evolve(e,b,{spacing:[1,1,1],dt:.1,steps:3}),aligned=solver.collocateHistory(history,halfHistory);
+  assert.deepEqual(aligned.frameIndices,[1,2]);
+  for(let i=0;i<2;i++){const expected=solver.collocateFields(history[i+1],halfHistory[i],halfHistory[i+1]);assert.deepEqual(aligned.electric[i],expected.electric);assert.deepEqual(aligned.magnetic[i],expected.magnetic);}
+  assert.throws(()=>solver.collocateHistory(history.slice(0,2),halfHistory.slice(0,1)),/histories/);
+  assert.throws(()=>solver.collocateHistory(history,halfHistory.slice(1)),/histories/);
+  const frame=Array(20834).fill(grid(0));assert.throws(()=>solver.collocateHistory([frame,frame,frame],[frame,frame]),/output-component limit/);
+});

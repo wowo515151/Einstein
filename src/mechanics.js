@@ -164,6 +164,17 @@ export class MaxwellEquations {
     if([...electricNodes.flat(3),...magneticNodes.flat(3)].some(value=>!Number.isFinite(value)))throw new RangeError("collocated field is non-finite");
     return {electric:electricNodes,magnetic:magneticNodes};
   }
+  /** Collocate each interior electric frame with its adjacent magnetic half-frames. */
+  collocateHistory(electricHistory,magneticHalfHistory){
+    const eShape=shapeOf(electricHistory),bShape=shapeOf(magneticHalfHistory);
+    if(eShape.length<5||eShape.at(-1)!==3||eShape[0]<3||bShape.length!==eShape.length||bShape[0]!==eShape[0]-1||bShape.slice(1).some((size,i)=>size!==eShape[i+1]))throw new RangeError("collocation histories must have matching (frames,...,Nx,Ny,Nz,3) shapes with one more electric frame");
+    const spatial=eShape.slice(-4,-1),cells=validateCellShape(spatial,3),batchShape=eShape.slice(1,-4),count=shapeProduct(batchShape),frames=eShape[0]-2;
+    if(spatial.some(size=>size<2))throw new RangeError("each spatial grid dimension must have at least 2 points");
+    if(frames*count*cells*6>MAX_FIELD_HISTORY_COMPONENTS)throw new RangeError("collocation history exceeds the bounded output-component limit");
+    validateNestedShape(electricHistory,eShape);validateNestedShape(magneticHalfHistory,bShape);
+    const samples=Array.from({length:frames},(_,index)=>this.collocateFields(electricHistory[index+1],magneticHalfHistory[index],magneticHalfHistory[index+1]));
+    return {frameIndices:Array.from({length:frames},(_,index)=>index+1),electric:samples.map(value=>value.electric),magnetic:samples.map(value=>value.magnetic)};
+  }
   maxwellResiduals(electricHistory,magneticHalfHistory,{spacing=[1,1,1],dt,current=null}={}){
     const eShape=shapeOf(electricHistory),bShape=shapeOf(magneticHalfHistory);
     if(eShape.length>5){
