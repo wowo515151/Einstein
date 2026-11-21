@@ -36,6 +36,6 @@ The [third-party provenance record](docs/provenance.md) identifies local modific
 
 ## Status
 
-The API covers the Lib4 class families, with bounded broadcasting for algebra/field value objects and leading-batch support across selected spacetime, geometry, and Maxwell operations. Three.js value adapters are isolated from the mathematical core. Several Python-specific behaviors, broader method-level parity, and GPU accuracy remain open. See the [port matrix](docs/port-matrix.md) and test results before using numerical outputs in research.
+Project development is paused at the user’s request as of 2026-11-21. The last local verification passed 640/640 tests; the public Pages build for source commit bcfba1c65fbc1031c69f8dfe4cd4e6d3651abb33 reports built. All ten live animations have been individually reviewed. The JavaScript library focuses on useful reusable operations for the project and its visualizations; complete feature-by-feature Lib4 parity is not required. Python/PyTorch behavior, broader metric-family coverage, broad GPU accuracy, physical device-loss behavior, physical-GPU rendering, and assistive-technology behavior remain limited or unverified. See the [port matrix](docs/port-matrix.md) and test results before using numerical outputs in research.
 
 Built by [Executive51.biz](https://Executive51.biz).
