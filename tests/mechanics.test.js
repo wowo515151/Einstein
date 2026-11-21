@@ -146,6 +146,12 @@ test("retarded fields resolve small nonzero separations near the origin",()=>{
     assert.ok(Math.abs(potential[0]*distance*4*Math.PI-1)<1e-12);
   }
 });
+test("electromagnetic dual accepts the constructor's relative antisymmetry tolerance",()=>{
+  const value=1e6,offset=1e-5,field=new EMFieldTensor([[0,value,0,0],[-value+offset,0,0,0],[0,0,0,0],[0,0,0,0]],{c:1});
+  const dual=field.dual().components,expected=-value+offset/2;
+  assert.ok(Math.abs(dual[2][3]-expected)<1e-9);assert.equal(dual[3][2],-dual[2][3]);
+  assert.equal(field.dual({orientation:-1}).components[2][3],-dual[2][3]);
+});
 test("batched electromagnetic four-forces are orthogonal to four-velocity",()=>{
   const field=EMFieldTensor.fromEB([[1,.2,-.3],[-.2,.7,.1]],[[.4,-.3,.5],[.6,.1,-.2]],{c:1});
   const velocity=FourVelocity.fromVelocity3([[.2,.1,0],[-.1,.3,.2]],1).components,covariant=velocity.map(row=>[-row[0],...row.slice(1)]);
