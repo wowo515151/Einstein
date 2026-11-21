@@ -236,6 +236,7 @@ test("forward geodesic endpoint sensitivities match a curved-coordinate solution
   const result=geodesic.endpointSensitivityForward([0,1],{steps:64});
   assert.ok(Math.abs(result.event[1]-Math.log(1.5))<1e-8);
   const expected=[1,1/1.5,1,1];for(let i=0;i<4;i++)for(let j=0;j<4;j++)assert.ok(Math.abs(result.jacobian[i][j]-(i===j?expected[i]:0))<1e-7);
+  const tangentExpected=[1,1/(1.5*1.5),1,1];for(let i=0;i<4;i++)for(let j=0;j<4;j++)assert.ok(Math.abs(result.tangentJacobian[i][j]-(i===j?tangentExpected[i]:0))<1e-7);
   const shot=new Geodesic4(connection,[0,0,0,0],[1,.1,0,0]).solveBoundary([1,Math.log(1.5),0,0],[0,1],{steps:32,jacobianMethod:"forward",format:"components",tolerance:1e-7});
   assert.ok(Math.abs(shot[3][1]-.5)<1e-6);assert.ok(Math.abs(shot[1].at(-1)[1]-Math.log(1.5))<1e-7);
   assert.throws(()=>geodesic.solveBoundary([1,0,0,0],[0,1],{jacobianMethod:"bad"}),/jacobianMethod/);
@@ -273,7 +274,9 @@ test("forward endpoint sensitivity requires the same standard forward connection
 test("forward endpoint sensitivities preserve bounded geodesic batches",()=>{
   const flat=()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],connection=new Connection4(flat,{metricDerivative:"forward"}),events=[[[0,0,0,0],[1,0,0,0]]],tangents=[[[1,.1,0,0],[1,.2,0,0]]],span=[0,2];
   const result=new Geodesic4(connection,events,tangents).endpointSensitivityForward(span,{steps:4});
-  for(let i=0;i<2;i++){const scalar=new Geodesic4(connection,events[0][i],tangents[0][i]).endpointSensitivityForward(span,{steps:4});assert.deepEqual(result.event[0][i],scalar.event);assert.deepEqual(result.tangent[0][i],scalar.tangent);assert.deepEqual(result.jacobian[0][i],scalar.jacobian);}
+  for(let i=0;i<2;i++){const scalar=new Geodesic4(connection,events[0][i],tangents[0][i]).endpointSensitivityForward(span,{steps:4});assert.deepEqual(result.event[0][i],scalar.event);assert.deepEqual(result.tangent[0][i],scalar.tangent);assert.deepEqual(result.jacobian[0][i],scalar.jacobian);assert.deepEqual(result.tangentJacobian[0][i],scalar.tangentJacobian);}
   const points=Array.from({length:7},()=>[0,0,0,0]),velocities=Array.from({length:7},()=>[1,0,0,0]);
   assert.throws(()=>new Geodesic4(connection,points,velocities).endpointSensitivityForward([0,1],{steps:2000}),/work limit/);
+  const oversized=Array.from({length:1639},()=>[0,0,0,0]),oversizedVelocity=Array.from({length:1639},()=>[1,0,0,0]);
+  assert.throws(()=>new Geodesic4(connection,oversized,oversizedVelocity).endpointSensitivityForward([0,1],{steps:1}),/component or work limit/);
 });

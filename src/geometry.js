@@ -294,11 +294,11 @@ export class Geodesic4 {
     const event=parseGeometryBatch(this.initialEvent,"initial event",[4]),tangent=parseGeometryBatch(this.initialTangent,"initial tangent",[4]);
     if(JSON.stringify(event.shape)!==JSON.stringify(tangent.shape))throw new RangeError("initial_event and initial_tangent must have matching (...,4) shapes");
     const batchShape=event.shape.slice(0,-1),count=batchShape.reduce((product,size)=>product*size,1);
-    if(count*24>MAX_COVARIANT_COMPONENTS||count*steps>12_000)throw new RangeError("endpoint sensitivity batch exceeds the bounded component or work limit");
+    if(count*40>MAX_COVARIANT_COMPONENTS||count*steps>12_000)throw new RangeError("endpoint sensitivity batch exceeds the bounded component or work limit");
     if(batchShape.length){
       const values=geometryBuildBatch(batchShape,index=>new Geodesic4(this.connection,geometryBatchGet(event.data,batchShape,index,batchShape),geometryBatchGet(tangent.data,batchShape,index,batchShape)).endpointSensitivityForward(span,{steps}));
       const project=(node,depth,key)=>depth===batchShape.length?node[key]:node.map(child=>project(child,depth+1,key));
-      return {event:project(values,0,"event"),tangent:project(values,0,"tangent"),jacobian:project(values,0,"jacobian")};
+      return {event:project(values,0,"event"),tangent:project(values,0,"tangent"),jacobian:project(values,0,"jacobian"),tangentJacobian:project(values,0,"tangentJacobian")};
     }
     const interval=vector(span,2,"parameter span"),initial=[...event.data,...tangent.data,...Array(16).fill(0),...identity(4).flat()];
     const rows=integrateRK4((_parameter,state)=>{
@@ -313,7 +313,7 @@ export class Geodesic4 {
       }
       return [...velocity,...acceleration,...T.flat(),...change.flat()];
     },initial,interval[0],interval[1],steps);
-    const last=rows.at(-1)[1];return {event:last.slice(0,4),tangent:last.slice(4,8),jacobian:Array.from({length:4},(_,i)=>last.slice(8+4*i,12+4*i))};
+    const last=rows.at(-1)[1];return {event:last.slice(0,4),tangent:last.slice(4,8),jacobian:Array.from({length:4},(_,i)=>last.slice(8+4*i,12+4*i)),tangentJacobian:Array.from({length:4},(_,i)=>last.slice(24+4*i,28+4*i))};
   }
   solveBoundary(targetEvent,span,{steps=100,iterations=12,maxIterations=iterations,tolerance=1e-9,damping=1e-10,format="samples",jacobianMethod="finite"}={}){
     if(!["samples","components"].includes(format))throw new TypeError("format must be 'samples' or 'components'");
