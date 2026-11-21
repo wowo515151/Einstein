@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Dual4,Jet4,forwardJacobian4,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward,ODEWorldline,integrateRK4ForwardTree} from "../src/relativity/index.js";
+import {Dual4,Jet4,forwardJacobian4,forwardHessian4,forwardSecondOrder4,DifferentialOperators4,Connection4,Geodesic4,Metric4,Curvature4,integrateRK4Forward4,integrateRK4Forward,ODEWorldline,integrateRK4ForwardTree,integrateRK4ForwardBounds} from "../src/relativity/index.js";
 
 const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(3).divide(x[3].pow(2).add(1)));
 function expected([t,x,y,z]){const denominator=1+z*z;return [Math.cos(t)*Math.exp(x),Math.sin(t)*Math.exp(x),3*y*y/denominator,-2*z*y**3/denominator**2];}
@@ -354,4 +354,17 @@ test("forward RK4 preserves rectangular states and flattens Jacobian axes",()=>{
   const parameter=integrateRK4ForwardTree((_t,x,p)=>[[x[0][0].multiply(p[0]),0]],[[2,1]],0,1,64,{parameters:[.3],withRespectTo:"parameters"}).at(-1);assert.ok(Math.abs(parameter.jacobian[0][0]-2*Math.exp(.3))<1e-8);
   assert.throws(()=>integrateRK4ForwardTree(()=>[[1,2,3],[4,5,6]],[[1,2],[3,4]],0,1,2),/shape/);
   assert.throws(()=>integrateRK4ForwardTree(()=>0,Array(33).fill(0),0,1,2),/32-component/);
+});
+
+
+test("forward RK4 differentiates integration bounds for a nonautonomous equation",()=>{
+  const start=.2,end=1,rows=integrateRK4ForwardBounds((t,x)=>[x[0].multiply(t)],[2],start,end,64),last=rows.at(-1),expected=2*Math.exp((end*end-start*start)/2);
+  assert.ok(Math.abs(last.value[0]-expected)<1e-8);assert.ok(Math.abs(last.jacobian[0][0]+start*expected)<1e-8);assert.ok(Math.abs(last.jacobian[0][1]-end*expected)<1e-8);
+  const middle=rows[32],time=.6,middleExpected=2*Math.exp((time*time-start*start)/2);assert.ok(Math.abs(middle.parameter-time)<1e-14);
+  assert.ok(Math.abs(middle.jacobian[0][0]-middleExpected*(-start+time/2))<1e-8);assert.ok(Math.abs(middle.jacobian[0][1]-middleExpected*time/2)<1e-8);assert.deepEqual(middle.parameterJacobian,[.5,.5]);
+  const reverse=integrateRK4ForwardBounds((t,x)=>[x[0].multiply(t)],[2],1,.2,64).at(-1),reverseExpected=2*Math.exp(-.48);
+  assert.ok(Math.abs(reverse.jacobian[0][0]+reverseExpected)<1e-8);assert.ok(Math.abs(reverse.jacobian[0][1]-.2*reverseExpected)<1e-8);
+  const zero=integrateRK4ForwardBounds((_t,x)=>[x[0]],[2],2,2,4).at(-1);assert.deepEqual(zero.jacobian,[[-2,2]]);
+  let calls=0;assert.throws(()=>integrateRK4ForwardBounds(()=>{calls++;return [0];},[1],2**53,2**53+4,4),/distinct physical steps/);assert.equal(calls,0);
+  assert.throws(()=>integrateRK4ForwardBounds((t,x)=>[x[0].multiply(Math.sin(t))],[1],0,1,4),/implicitly converted/);
 });

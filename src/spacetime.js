@@ -199,6 +199,25 @@ export function integrateRK4Forward(rhs,initialState,start,end,steps,{parameters
   return rows.map(([parameter,state])=>({parameter,value:state.slice(0,n),jacobian:Array.from({length:n},(_,i)=>state.slice(n+i*columns,n+(i+1)*columns))}));
 }
 
+/** Propagate derivatives with respect to integration bounds using normalized time. */
+export function integrateRK4ForwardBounds(rhs,initialState,start,end,steps){
+  if(typeof rhs!=="function")throw new TypeError("rhs must be a function");
+  if(!Number.isFinite(start)||!Number.isFinite(end)||!Number.isFinite(end-start))throw new RangeError("integration bounds and their difference must be finite");
+  if(!Number.isInteger(steps)||steps<1||steps>MAX_INTEGRATION_STEPS)throw new RangeError(`steps must be an integer from 1 to ${MAX_INTEGRATION_STEPS}`);
+  const span=end-start,h=1/steps;let u=0,previous=start;
+  for(let i=0;i<steps;i++){
+    const next=i===steps-1?1:u+h,mid=u+(next-u)/2,physicalNext=(1-next)*start+next*end,physicalMid=(1-mid)*start+mid*end;
+    if(!Number.isFinite(physicalNext)||!Number.isFinite(physicalMid)||(start!==end&&(span>0?!(physicalNext>previous&&physicalMid>previous&&physicalMid<physicalNext):!(physicalNext<previous&&physicalMid<previous&&physicalMid>physicalNext))))throw new RangeError("integration bounds cannot represent distinct physical steps and midpoints");
+    previous=physicalNext;u=next;
+  }
+  const rows=integrateRK4Forward((time,state,bounds)=>{
+    const length=bounds[1].subtract(bounds[0]),physicalTime=bounds[0].multiply(1-time).add(bounds[1].multiply(time)),value=rhs(physicalTime,state);
+    if(!Array.isArray(value)||value.length!==state.length)throw new RangeError("rhs result shape must match the integration state");
+    return value.map(component=>length.multiply(component));
+  },initialState,0,1,steps,{parameters:[start,end],withRespectTo:"parameters"});
+  return rows.map(row=>({parameter:(1-row.parameter)*start+row.parameter*end,parameterJacobian:[1-row.parameter,row.parameter],value:row.value,jacobian:row.jacobian}));
+}
+
 /** Propagate sensitivities for a bounded rectangular scalar or array state. */
 export function integrateRK4ForwardTree(rhs,initialState,start,end,steps,options={}){
   if(typeof rhs!=="function")throw new TypeError("rhs must be a function");
