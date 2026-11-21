@@ -355,6 +355,14 @@ test("relativity context propagates c through spacetime factories",()=>{
   assert.equal(slice.c,2);
   assert.deepEqual(context.createSpacetimeInterval([2,1,0,0]).properTime(),Math.sqrt(3)/2);
 });
+test("relativity context rejects unknown configuration and factory options",()=>{
+  assert.throws(()=>new RelativityContext({dtype:"float32"}),/unknown RelativityContext option "dtype"/);
+  const context=new RelativityContext();
+  assert.throws(()=>context.createInertialFrame([0,0,0,0],{orientaton:null}),/unknown createInertialFrame option "orientaton"/);
+  assert.throws(()=>context.createLightCone([0,0,0,0],{branh:"future"}),/unknown createLightCone option "branh"/);
+  assert.throws(()=>context.createSpatialSlice([0,0,0,0],[1,0,0,0],null,{attol:1e-9}),/unknown createSpatialSlice option "attol"/);
+  assert.throws(()=>context.setUnits("SI",{epsilonO:1}),/unknown setUnits option "epsilonO"/);
+});
 test("four-velocity relative velocity is a rest-frame three-vector and broadcasts",()=>{
   const a=FourVelocity.fromVelocity3([.3*C,0,0]),b=FourVelocity.fromVelocity3([-.2*C,0,0]),relative=a.relativeVelocity(b);
   assert.ok(Math.abs(relative[0]+(.5/1.06)*C)<1e-7);assert.ok(Math.abs(relative[1])<1e-9&&Math.abs(relative[2])<1e-9);
