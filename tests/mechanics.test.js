@@ -648,3 +648,16 @@ test("Maxwell collocation preserves bounded multidimensional batches",()=>{
   assert.throws(()=>solver.collocateFields(e,before,[after[0]]),/matching/);
   const excessive=Array(20834).fill(make(0));assert.throws(()=>solver.collocateFields(excessive,excessive,excessive),/output-component limit/);
 });
+
+
+test("collocated evolved Maxwell plane wave converges to the analytic field",()=>{
+  function error(n){
+    const make=fn=>Array.from({length:2},()=>Array.from({length:n},(_,j)=>Array.from({length:2},()=>fn(j))));
+    const electric=make(j=>[Math.cos(2*Math.PI*j/n),0,0]),magnetic=make(j=>[0,0,-Math.cos(2*Math.PI*(j+.5)/n)]),solver=new MaxwellEquations({c:1,epsilon0:1});
+    const [,history,,halfHistory]=solver.evolve(electric,magnetic,{spacing:[1,1/n,1],dt:.25/n,steps:2*n+1}),nTime=2*n;
+    const aligned=solver.collocateFields(history[nTime],halfHistory[nTime-1],halfHistory[nTime]);
+    return Math.sqrt(Array.from({length:n},(_,j)=>(aligned.magnetic[0][j][0][2]+Math.cos(2*Math.PI*(j/n-.5)))**2).reduce((sum,value)=>sum+value,0)/n);
+  }
+  const coarse=error(8),medium=error(16),fine=error(32);
+  assert.ok(fine<.005,`fine wave error: ${fine}`);assert.ok(coarse/medium>3.8&&medium/fine>3.8,`refinement ratios: ${coarse/medium}, ${medium/fine}`);
+});
