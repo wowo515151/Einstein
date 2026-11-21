@@ -356,6 +356,15 @@ test("rapidity direction normalization handles extreme finite scales",()=>{
   }
   assert.throws(()=>LorentzTransform.fromRapidity(.5,[0,0,0]),/nonzero/);
 });
+test("raw Lorentz tensor transforms use the source inverse convention",()=>{
+  const L=new LorentzTransform([[2,3,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,0]]);
+  const input=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
+  assert.equal(L.validate(),false);
+  assert.deepEqual(L.applyTensor(input,["up","up"]),[[13,3,0,0],[3,1,0,0],[0,0,1,0],[0,0,0,0]]);
+  assert.deepEqual(L.applyTensor(input,["down","down"]),[[13,-3,0,0],[-3,1,0,0],[0,0,1,0],[0,0,0,0]]);
+  assert.deepEqual(L.applyTensor(input,["down","up"]),[[-5,-3,0,0],[3,1,0,0],[0,0,1,0],[0,0,0,0]]);
+  assert.throws(()=>L.applyTensor(new Tensor4(input,["up","up"])),/singular/);
+});
 test("Poincare transforms preserve affine composition and inverse",()=>{
   const t=new PoincareTransform(LorentzTransform.boost([.2,0,0]),[3,4,0,0]),p=[1,2,3,4];
   const roundTrip=t.inverse().applyEvent(t.applyEvent({position:p})).position;

@@ -90,3 +90,5 @@ Construct Lorentz maps with `identity`, `boost(beta)`, `fromRapidity(rapidity,di
 | `new PoincareTransform(lorentz,translation)`, `PoincareTransform.identity({batchShape})` | An affine transform or a batch of identities. Constructor arguments are optional. |
 | `P.applyEvent(event)`, `P.applyVector(v)` | An object containing a transformed `position` array, or a `Vector4` without translation. |
 | `P.compose(other)`, `P.inverse()` | A new affine transform; composition applies `other` first. |
+
+For raw rank-two input, `applyTensor` uses the Lorentz inverse convention `ηLᵀη` for lower indices, as Lib4 does. The constructor does not validate a matrix unless requested, so call `validate()` when accepting an external transform; the inverse convention assumes a Lorentz matrix. The `Tensor4` input extension delegates to the general tensor transformation, which requires an invertible matrix.

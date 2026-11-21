@@ -216,6 +216,18 @@ test("four-velocity relative velocity is a rest-frame three-vector and broadcast
   assert.throws(()=>a.relativeVelocity([1,0,0,0]),/other must be a FourVelocity/);
   assert.throws(()=>a.relativeVelocity(FourVelocity.fromVelocity3([0,0,0],1)),/same speed of light/);
 });
+test("relative velocity matches analytic longitudinal and transverse components",()=>{
+  for(const {c,u,target} of [
+    {c:1,u:.4,target:[.3,.5,.1]},
+    {c:2,u:.8,target:[.6,.4,-.2]},
+    {c:1,u:-.6,target:[-.2,.3,.4]},
+  ]){
+    const observer=FourVelocity.fromVelocity3([u,0,0],c),moving=FourVelocity.fromVelocity3(target,c);
+    const actual=observer.relativeVelocity(moving),denominator=1-u*target[0]/(c*c),gamma=1/Math.sqrt(1-(u/c)**2);
+    const expected=[(target[0]-u)/denominator,target[1]/(gamma*denominator),target[2]/(gamma*denominator)];
+    actual.forEach((value,i)=>assert.ok(Math.abs(value-expected[i])<1e-12));
+  }
+});
 test("four-velocity conversion preserves finite values at extreme scales",()=>{
   for(const c of [1e-200,1e-160,1e200]){
     const velocity=.5*c,moving=FourVelocity.fromVelocity3([velocity,0,0],c),observer=FourVelocity.fromVelocity3([0,0,0],c);
