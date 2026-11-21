@@ -183,3 +183,17 @@ const magneticNode = aligned.magnetic[0][0][0][0];
 const field = EMFieldTensor.fromEB(electricNode,magneticNode,{c:1,epsilon0:1});
 console.log(times[aligned.frameIndices[0]],field.invariants()); // 0.1, with B²-E² = -1
 ```
+
+## Rectangular ODE parameter sensitivity
+
+Callbacks use explicit dual-number methods. The returned state retains its rectangular shape, while Jacobian rows follow row-major leaf order; see [Spacetime and worldlines](spacetime.md) for the component and work limits.
+
+```js
+import { integrateRK4ForwardTree } from "../src/relativity/index.js";
+const rate = (_time, state, parameters) => [[state[0][0].multiply(parameters[0]), 0]];
+const history = integrateRK4ForwardTree(rate, [[2,1]], 0, 1, 64, {
+  parameters: [.3], withRespectTo: "parameters"
+});
+const result = history.at(-1);
+console.log(result.value, result.jacobian); // approximately [[2.700, 1]], [[2.700], [0]]
+```
