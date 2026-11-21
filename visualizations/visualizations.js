@@ -1,7 +1,7 @@
 import { createViewerWithRuntime } from "../src/three-viz/core/mount.js";
 import { pointCloudPlotter } from "../src/three-viz/plotters/point-cloud-plotter.js";
 import { createCarPaintMaterial, retainCarPaintEnvironment } from "../src/three-viz/plotters/shared/materials.js";
-import { buildSceneData, composeCollinearVelocities, fieldIsosurfaces, fieldWorldlines, particleMomentumState, sceneAccessibleLabel, sceneFromFragment, scenes, sceneAxes, selectedWorldlineEvents, transformedFieldState, twinClockReadings, twinClockPositions } from "./scene-models.js";
+import { buildSceneData, composeCollinearVelocities, curvatureEmbeddingLibraryCheck, fieldIsosurfaces, fieldWorldlines, particleMomentumState, sceneAccessibleLabel, sceneFromFragment, scenes, sceneAxes, selectedWorldlineEvents, transformedFieldState, twinClockReadings, twinClockPositions } from "./scene-models.js";
 import { createLabeledBox } from "../src/three-viz/objects/labeled-box.js";
 import { Vector4 } from "../src/relativity/index.js";
 import { createPlaybackController } from "./playback.js";
@@ -30,6 +30,7 @@ let observerFrame = "lab";
 let viewer;
 let pageClosed = false;
 let currentRows = [];
+let curvatureCheckCache;
 const playback = createPlaybackController({
   reducedMotion: () => prefersReducedMotion.matches,
   available: () => !pageClosed,
@@ -107,7 +108,8 @@ function updateModelReadout(rows) {
     readout.textContent = `${rays.size} null-ray geodesics in a softened weak-field metric; the ray bundle bends toward the central mass. Library check: maximum |g(u,u)| drift in this sample = ${maxNullDrift.toExponential(2)}. The model is pedagogical, not a calibrated lens.`;
   } else if (activeScene.id === "curvature") {
     const center = rows.find((row) => row.id === "grid-8-8"), sample = rows.find((row) => row.id === "grid-12-8");
-    readout.textContent = `Surface metric overlay: radial gᵣᵣ = ${sample.radialMetric.toFixed(4)} at r = ${Math.hypot(sample.x, sample.z).toFixed(2)}; wire spacing represents the induced radial stretch. Surface color shows Gaussian curvature K; at the center K = ${center.gaussianCurvature.toFixed(4)}. This is a pedagogical embedded surface, not a spacetime metric.`;
+    if (!curvatureCheckCache || curvatureCheckCache.beta !== beta) curvatureCheckCache = { beta, value: curvatureEmbeddingLibraryCheck(beta, 0, 0) };
+    readout.textContent = `Surface metric overlay: radial gᵣᵣ = ${sample.radialMetric.toFixed(4)} at r = ${Math.hypot(sample.x, sample.z).toFixed(2)}; wire spacing represents the induced radial stretch. Surface color shows Gaussian curvature K; at the center K = ${center.gaussianCurvature.toFixed(4)}. Library check: R/2 = ${curvatureCheckCache.value.toFixed(4)} for a direct-product spacetime built from this surface metric, using finite differences. The embedding is pedagogical.`;
   } else if (activeScene.id === "field-slices") {
     const surfaces = fieldIsosurfaces(beta, time);
     readout.textContent = `Normalized vacuum plane wave: E points along x and B along y, propagating along +z at c = 1. Surface height displays 0.45 Eₓ, not physical y position. One playback cycle spans a wave period (ct = 2π × time / (1 + parameter)). ${surfaces.length} translucent sheets mark Eₓ = ±0.6. The synthetic inertial observer paths show field height at each event, not physical y or field-driven trajectories.`;

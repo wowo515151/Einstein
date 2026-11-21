@@ -1,4 +1,4 @@
-import { Connection4, EMFieldTensor, Event4, FourMomentum, FourVelocity, Geodesic4, LightCone, LorentzTransform, Metric4, SpacetimeInterval, Vector4, integrateRK4 } from "../src/relativity/index.js";
+import { Connection4, Curvature4, EMFieldTensor, Event4, FourMomentum, FourVelocity, Geodesic4, LightCone, LorentzTransform, Metric4, SpacetimeInterval, Vector4, integrateRK4 } from "../src/relativity/index.js";
 
 const MAX_SAMPLES = 320;
 const PI2 = Math.PI * 2;
@@ -95,6 +95,15 @@ export function curvatureEmbeddingValues(beta, x, z) {
     ? first * second / (radius * radialMetric * radialMetric)
     : 4 * decay * decay * amplitude * amplitude;
   return Object.freeze({ radialMetric, gaussianCurvature });
+}
+/** Compare the induced surface with a direct-product spacetime metric via the library. */
+export function curvatureEmbeddingLibraryCheck(beta,x,z) {
+  curvatureEmbeddingValues(beta,x,z);
+  const metric = ([,u,,v]) => {
+    const factor=-.76*.55*beta*Math.exp(-.38*(u*u+v*v)),hx=factor*u,hz=factor*v;
+    return [[-1,0,0,0],[0,1+hx*hx,0,hx*hz],[0,0,1,0],[0,hx*hz,0,1+hz*hz]];
+  };
+  return new Curvature4(metric,{step:1e-4}).ricciScalar([0,x,0,z])/2;
 }
 export function fieldIsosurfaces(beta, time, { level = .6, extent = 2 } = {}) {
   finite(beta, "beta"); finite(time, "time"); finite(level, "level"); finite(extent, "extent");

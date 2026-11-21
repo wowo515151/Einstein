@@ -104,6 +104,7 @@ test("application fallback supports keyboard sample inspection and scene changes
       assert.equal(byId("scene-title").textContent,scene.title);
       assert.equal(button.getAttribute("aria-current"),"true");
       assert.ok(byId("scene-readout").textContent.length>0);
+      if(scene.id==="curvature")assert.match(byId("scene-readout").textContent,/Library check: R\/2 = .*finite differences/);
       byId("time-slider").value="0.35";byId("time-slider").emit("input");
       const sampleRows=buildSceneData(scene.id,{time:.35,beta:.6,observerFrame:"lab"});
       assert.equal(Number(byId("sample-number").max),sampleRows.length);

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { buildSceneData, composeCollinearVelocities, curvatureEmbeddingValues, fieldIsosurfaces, fieldWorldlines, planeWaveState, particleMomentumState, sampleLimit, sceneAccessibleLabel, sceneFromFragment, scenes, sceneAxes, selectedWorldlineEvents, transformedFieldState, twinClockReadings, twinClockPositions } from "./scene-models.js";
+import { buildSceneData, composeCollinearVelocities, curvatureEmbeddingValues, curvatureEmbeddingLibraryCheck, fieldIsosurfaces, fieldWorldlines, planeWaveState, particleMomentumState, sampleLimit, sceneAccessibleLabel, sceneFromFragment, scenes, sceneAxes, selectedWorldlineEvents, transformedFieldState, twinClockReadings, twinClockPositions } from "./scene-models.js";
 import { LorentzTransform, Vector4, samplePlaneWaveBatch } from "../src/relativity/index.js";
 import { updateViewer } from "./viewer-update.js";
 import { distinctPathPoints, twinPathColor } from "./path-points.js";
@@ -165,6 +165,13 @@ test("curved embedding exposes its induced radial metric and Gaussian curvature"
   assert.ok(rows.every((row) => Number.isFinite(row.radialMetric) && Number.isFinite(row.gaussianCurvature)));
   assert.throws(() => curvatureEmbeddingValues(1, 0, 0), /beta/);
 });
+test("curvature scene matches the library curvature of its induced metric",()=>{
+  for(const beta of [.1,.6,.95])for(const [x,z] of [[0,0],[1.1,0],[.7,-.4]]){
+    const expected=curvatureEmbeddingValues(beta,x,z).gaussianCurvature;
+    assert.ok(Math.abs(curvatureEmbeddingLibraryCheck(beta,x,z)-expected)<1e-7);
+  }
+});
+
 test("animated field slice carries paired E/B vectors and analytic isosurfaces", () => {
   const beta = .62, time = .37, rows = buildSceneData("field-slices", { beta, time });
   const grid=rows.filter(row=>row.id.startsWith("grid-"));
