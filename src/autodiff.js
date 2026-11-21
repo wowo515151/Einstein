@@ -200,14 +200,22 @@ function prepareForwardTree(point){
   return {values,rebuild};
 }
 
-/** Forward Jacobian for a scalar or rectangular input, flattened in row-major order. */
-export function forwardJacobianTree(field,point){
+/** Forward Jacobian for a scalar or rectangular input. */
+export function forwardJacobianTree(field,point,{derivativeShape="flat"}={}){
   if(typeof field!=="function")throw new TypeError("field must be a function");
-  const input=prepareForwardTree(point);return forwardJacobian(values=>field(input.rebuild(values)),input.values);
+  if(!["flat","nested"].includes(derivativeShape))throw new TypeError("derivativeShape must be flat or nested");
+  const input=prepareForwardTree(point),result=forwardJacobian(values=>field(input.rebuild(values)),input.values);
+  if(derivativeShape==="flat")return result;
+  const reshape=(value,derivative)=>typeof value==="number"?input.rebuild(derivative):value.map((child,i)=>reshape(child,derivative[i]));
+  return {value:result.value,jacobian:reshape(result.value,result.jacobian)};
 }
 
-/** Forward second derivatives for a scalar or rectangular input, flattened in row-major order. */
-export function forwardSecondOrderTree(field,point){
+/** Forward second derivatives for a scalar or rectangular input. */
+export function forwardSecondOrderTree(field,point,{derivativeShape="flat"}={}){
   if(typeof field!=="function")throw new TypeError("field must be a function");
-  const input=prepareForwardTree(point);return forwardSecondOrder(values=>field(input.rebuild(values)),input.values);
+  if(!["flat","nested"].includes(derivativeShape))throw new TypeError("derivativeShape must be flat or nested");
+  const input=prepareForwardTree(point),result=forwardSecondOrder(values=>field(input.rebuild(values)),input.values);
+  if(derivativeShape==="flat")return result;
+  const reshape=(value,derivative,order)=>typeof value==="number"?(order===1?input.rebuild(derivative):input.rebuild(derivative.map(row=>input.rebuild(row)))):value.map((child,i)=>reshape(child,derivative[i],order));
+  return {value:result.value,jacobian:reshape(result.value,result.jacobian,1),hessian:reshape(result.value,result.hessian,2)};
 }

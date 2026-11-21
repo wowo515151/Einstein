@@ -419,3 +419,12 @@ test("general Hessians cover every direction at the input-size boundary",()=>{
   }
   assert.throws(()=>forwardSecondOrder(()=>Array(63).fill(0),Array(32).fill(0)),/component limit/);
 });
+
+
+test("forward tree derivatives can preserve input axes",()=>{
+  const point=[[1,2],[3,4]],field=x=>[x[0][0].multiply(x[1][1]),x[1][0].pow(2)],first=forwardJacobianTree(field,point,{derivativeShape:"nested"}),second=forwardSecondOrderTree(field,point,{derivativeShape:"nested"});
+  assert.deepEqual(first.jacobian,[[[4,0],[0,1]],[[0,0],[6,0]]]);assert.deepEqual(second.jacobian,first.jacobian);
+  assert.equal(second.hessian[0][0][0][1][1],1);assert.equal(second.hessian[0][1][1][0][0],1);assert.equal(second.hessian[1][1][0][1][0],2);
+  assert.deepEqual(forwardSecondOrderTree(x=>x.pow(2),3,{derivativeShape:"nested"}),{value:9,jacobian:6,hessian:2});
+  assert.throws(()=>forwardJacobianTree(x=>x,[1],{derivativeShape:"bad"}),/derivativeShape/);
+});
