@@ -67,7 +67,17 @@ test("application fallback supports keyboard sample inspection and scene changes
     assert.equal(byId("selection-readout").textContent,describeSample(buildSceneData("minkowski",{time:.5,beta:.6,observerFrame:"lab"}),2));
     byId("sample-number").value=String(rows.length+1);byId("inspect-sample").emit("click");
     assert.match(byId("selection-readout").textContent,/Choose a sample/);
-    const buttons=byId("scene-list").querySelectorAll("button");buttons.find(button=>button.dataset.scene==="twins").emit("click");
+    const buttons=byId("scene-list").querySelectorAll("button");
+    buttons.find(button=>button.dataset.scene==="light-cone").emit("click");
+    byId("time-slider").value="0.75";byId("time-slider").emit("input");
+    assert.match(byId("scene-readout").textContent,/future surface samples;.*surface null; r = 0 timelike, r = 2\|ct\| spacelike/);
+    byId("time-slider").value="0.25";byId("time-slider").emit("input");
+    assert.match(byId("scene-readout").textContent,/past surface samples;.*surface null; r = 0 timelike, r = 2\|ct\| spacelike/);
+    byId("time-slider").value="0.50000001";byId("time-slider").emit("input");
+    assert.match(byId("scene-readout").textContent,/ct = 5\.000e-8, surface null; r = 0 null, r = 2\|ct\| null/);
+    byId("time-slider").value="0.5";byId("time-slider").emit("input");
+    assert.match(byId("scene-readout").textContent,/apex is coincident.*r = 1 is spacelike/);
+    buttons.find(button=>button.dataset.scene==="twins").emit("click");
     assert.equal(locationStub.hash,"#twins");assert.match(byId("scene-title").textContent,/Twin/);
     let skipDefaultPrevented=false;
     byId("skip-to-scene").emit("click",{preventDefault(){skipDefaultPrevented=true;}});

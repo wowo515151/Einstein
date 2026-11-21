@@ -27,3 +27,5 @@ Viewer setup is asynchronous. The app snapshots the requested scene and controls
 Reset scene pauses playback and restores the default time, model parameter, observer frame, and camera view.
 
 The analytic embedding helper returns the flat far-field limit when its Gaussian profile underflows, including at finite coordinates whose squared radius overflows. The displayed grid uses a much smaller bounded range.
+
+The light-cone readout classifies representative interior and exterior events as well as the sphere surface. At the apex it labels the origin as coincident and samples a nonzero spatial separation. Classifications use the library tolerance.

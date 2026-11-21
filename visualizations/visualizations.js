@@ -81,9 +81,16 @@ function updateModelReadout(rows) {
   } else if (activeScene.id === "light-cone") {
     const samples = rows;
     const first = samples[0];
-    const firstType = new Vector4([first.ct, first.x, first.y, first.z]).causalName();
     const branch = first.ct < 0 ? "past" : first.ct > 0 ? "future" : "apex";
-    readout.textContent = `Library check: ${samples.length} ${branch} samples; ct = ${first.ct.toFixed(3)}, classified ${firstType}.`;
+    if (first.ct === 0) {
+      const outside = new Vector4([0, 1, 0, 0]).causalName();
+      readout.textContent = `Library check: the apex is coincident with the origin; an event at r = 1 is ${outside}.`;
+    } else {
+      const radius = Math.abs(first.ct), surface = new Vector4([first.ct, first.x, first.y, first.z]).causalName();
+      const inside = new Vector4([first.ct, 0, 0, 0]).causalName(), outside = new Vector4([first.ct, 2 * radius, 0, 0]).causalName();
+      const displayedCt = radius < .0005 ? first.ct.toExponential(3) : first.ct.toFixed(3);
+      readout.textContent = `Library check: ${samples.length} ${branch} surface samples; ct = ${displayedCt}, surface ${surface}; r = 0 ${inside}, r = 2|ct| ${outside}.`;
+    }
   } else if (activeScene.id === "lorentz") {
     const selectedLabel = observerFrame === "moving" ? "moving-observer simultaneity slice" : "rod-rest simultaneity slice";
     const selectedSlice = rows.filter((row) => row.label === selectedLabel);
