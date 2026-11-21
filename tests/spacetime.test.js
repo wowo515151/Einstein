@@ -302,7 +302,7 @@ test("light-cone containment, surface checks, sampling, and hyperplane hits broa
   const misses=futureGrid.intersectHypersurface([1,1,0,0],1,[[-1,0,0]]);
   assert.deepEqual(misses.hitMask,[[false],[false]]);
   assert.ok(misses.events.every(row=>row[0].every(Number.isNaN)));
-  assert.throws(()=>futureGrid.intersectWorldline([0,0,0,0],[1,0,0,0]),/unbatched cone apex/);
+  assert.equal(futureGrid.intersectWorldline([0,0,0,0],[1,0,0,0]).length,2);
 });
 test("light-cone worldline branch filtering uses time-coordinate tolerance",()=>{
   const future=new LightCone([0,0,0,0],{branch:"future",atol:1e-10});
@@ -550,4 +550,14 @@ test("invalid spatial bases and non-finite worldline parameters reject",()=>{
   const batchedEvent=new Event4([[0,0,0,0],[1,0,0,0]]);
   assert.throws(()=>new WorldlineSegment(batchedEvent,[1,0,0,0],[1,0,0,0],[1,0,0,0]),/start event/);
   assert.throws(()=>new WorldlineSegment([0,0,0,0],batchedEvent,[1,0,0,0],[1,0,0,0]),/end event/);
+});
+
+
+test("light-cone worldline intersections broadcast batched apexes and lines",()=>{
+  const apexes=[[0,0,0,0],[1,0,0,0]],origins=[[[0,1,0,0]],[[0,2,0,0]]],directions=[[1,0,0,0],[0,0,1,0]],cone=new LightCone(apexes,{atol:0});
+  const result=cone.intersectWorldline(origins,directions);
+  for(let i=0;i<2;i++)for(let j=0;j<2;j++){const scalar=new LightCone(apexes[j],{atol:0}).intersectWorldline(origins[i][0],directions[j]);assert.deepEqual(result[i][j],scalar);}
+  assert.equal(result[0][0].length,2);assert.equal(result[0][1].length,1);assert.equal(result[1][1].length,0);
+  const future=new LightCone(apexes,{branch:"future",atol:0});assert.deepEqual(future.intersectWorldline([0,1,0,0],[1,0,0,0]).map(hits=>hits.length),[1,1]);
+  assert.throws(()=>cone.intersectWorldline([[0,0,0,0],[0,0,0,0],[0,0,0,0]],[1,0,0,0]),/broadcast/);
 });
