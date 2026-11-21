@@ -127,6 +127,12 @@ test("second-order jets match analytic scalar Hessians",()=>{
 test("second-order division, logarithm and square root follow analytic derivatives",()=>{
   const quotient=forwardHessian4(x=>x[0].divide(x[1]),[3,2,0,0]);
   assert.equal(quotient.value,1.5);assert.deepEqual(quotient.gradient,[.5,-.75,0,0]);assert.equal(quotient.hessian[0][1],-.25);assert.equal(quotient.hessian[1][0],-.25);assert.equal(quotient.hessian[1][1],.75);
+  for(const scale of [1e-200,1e200]){
+    const identity=forwardHessian4(x=>x[0].divide(x[0]),[scale,0,0,0]);
+    assert.equal(identity.value,1);assert.deepEqual(identity.gradient,[0,0,0,0]);assert.deepEqual(identity.hessian,Array.from({length:4},()=>[0,0,0,0]));
+    const constant=forwardHessian4(()=>Jet4.constant(scale).divide(scale),[0,0,0,0]);assert.equal(constant.value,1);assert.deepEqual(constant.gradient,[0,0,0,0]);
+  }
+  const scaled=forwardHessian4(x=>x[0].divide(1e-200),[1e-200,0,0,0]);assert.equal(scaled.value,1);assert.equal(scaled.gradient[0],1e200);assert.equal(scaled.hessian[0][0],0);
   const elementary=forwardHessian4(x=>x[0].log().add(x[1].sqrt()),[2,4,0,0]);assert.equal(elementary.hessian[0][0],-.25);assert.equal(elementary.hessian[1][1],-1/32);
   const large=forwardHessian4(x=>x[0].log(),[1e155,0,0,0]);assert.ok(large.hessian[0][0]<0);assert.ok(Math.abs(large.hessian[0][0]/-1e-310-1)<1e-10);
 });

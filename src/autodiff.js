@@ -75,7 +75,7 @@ export class Jet4 {
   add(other){const b=asJet(other);return new Jet4(this.value+b.value,this.derivatives.map((v,i)=>v+b.derivatives[i]),this.hessian.map((row,i)=>row.map((v,j)=>v+b.hessian[i][j])));}
   subtract(other){const b=asJet(other);return new Jet4(this.value-b.value,this.derivatives.map((v,i)=>v-b.derivatives[i]),this.hessian.map((row,i)=>row.map((v,j)=>v-b.hessian[i][j])));}
   multiply(other){const b=asJet(other);return new Jet4(this.value*b.value,this.derivatives.map((v,i)=>v*b.value+this.value*b.derivatives[i]),this.hessian.map((row,i)=>row.map((v,j)=>v*b.value+this.derivatives[i]*b.derivatives[j]+this.derivatives[j]*b.derivatives[i]+this.value*b.hessian[i][j])));}
-  divide(other){const b=asJet(other);if(b.value===0)throw new RangeError("jet division by zero");const inverse=1/b.value;return this.multiply(b._unary(inverse,-inverse*inverse,2*inverse*inverse*inverse));}
+  divide(other){const b=asJet(other);if(b.value===0)throw new RangeError("jet division by zero");const value=this.value/b.value,derivatives=this.derivatives.map((v,i)=>(v-value*b.derivatives[i])/b.value),hessian=this.hessian.map((row,i)=>row.map((v,j)=>(v-value*b.hessian[i][j]-derivatives[i]*b.derivatives[j]-derivatives[j]*b.derivatives[i])/b.value));return new Jet4(value,derivatives,hessian);}
   negate(){return this._unary(-this.value,-1,0);}
   _unary(value,first,second){return new Jet4(value,this.derivatives.map(v=>first*v),this.hessian.map((row,i)=>row.map((v,j)=>first*v+second*this.derivatives[i]*this.derivatives[j])));}
   sin(){return this._unary(Math.sin(this.value),Math.cos(this.value),-Math.sin(this.value));}
