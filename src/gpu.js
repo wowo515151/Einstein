@@ -27,7 +27,7 @@ fn plane_wave(@builtin(global_invocation_id) gid: vec3<u32>) {
 }`;
 
 export class WebGPUBackend {
-  constructor(){this.adapter=null;this.device=null;this.pipeline=null;this.wavePipeline=null;this.waveError=null;this.status="uninitialized";this.lastExecution="none";this.error=null;this._initializing=null;this._waveInitializing=null;this._disposed=false;this._disposeWaiters=new Set();this._retiredFailureDevice=null;}
+  constructor(){this.adapter=null;this.device=null;this.pipeline=null;this.wavePipeline=null;this.waveError=null;this.status="uninitialized";this.lastExecution="none";this.error=null;this._initializing=null;this._waveInitializing=null;this._disposed=false;this._disposeWaiters=new Set();this._deviceWaiters=new Map();this._retiredFailureDevice=null;}
   static supported(){return typeof navigator!=="undefined"&&!!navigator.gpu;}
   async initialize(){
     if(this.status==="ready")return true;
@@ -45,6 +45,7 @@ export class WebGPUBackend {
         if(this._disposed){device.destroy?.();return false;}
         this.device=device;
         const lost=device.lost?.then(info=>{
+          this._retireDeviceWaiters(device);
           if(this._disposed)return false;
           if(this.device===device){this.device=null;this.pipeline=null;this.wavePipeline=null;this._waveInitializing=null;this.adapter=null;this.status="lost";}
           else if(info?.reason!=="destroyed"&&this._retiredFailureDevice===device&&this.status==="failed"){this.status="lost";this._retiredFailureDevice=null;}
@@ -142,7 +143,7 @@ export class WebGPUBackend {
       pass.setPipeline(pipeline);pass.setBindGroup(0,bind);pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();
       encoder.copyBufferToBuffer(out,0,read,0,n*4);dev.queue.submit([encoder.finish()]);
       const mapping=read.mapAsync(GPUMapMode.READ);
-      const completed=await this._untilDisposed(dev.lost?Promise.race([mapping.then(()=>true),dev.lost.then(()=>false)]):mapping.then(()=>true));
+      const completed=await this._untilDisposed(this._untilDeviceRetired(dev,mapping.then(()=>true)));
       mapped=completed;
       if(!completed||this.device!==dev||this._disposed)return fallback();
       const values=Array.from(new Float32Array(read.getMappedRange()).slice());
@@ -158,10 +159,17 @@ export class WebGPUBackend {
     }
     finally{if(mapped)try{read?.unmap();}catch{}this._destroy(a,b,out,read);}
   }
+  _untilDeviceRetired(device,work){
+    if(this.device!==device){Promise.resolve(work).catch(()=>{});return Promise.resolve(false);}
+    let cancel;const signal=new Promise(resolve=>{cancel=()=>resolve(false);});let waiters=this._deviceWaiters.get(device);
+    if(!waiters){waiters=new Set();this._deviceWaiters.set(device,waiters);}waiters.add(cancel);
+    return Promise.race([work,signal]).finally(()=>{waiters.delete(cancel);if(waiters.size===0&&this._deviceWaiters.get(device)===waiters)this._deviceWaiters.delete(device);});
+  }
+  _retireDeviceWaiters(device){const waiters=this._deviceWaiters.get(device);if(!waiters)return;this._deviceWaiters.delete(device);for(const cancel of waiters)cancel();waiters.clear();}
   _untilDisposed(work){if(this._disposed){Promise.resolve(work).catch(()=>{});return Promise.resolve(false);}let cancel;const signal=new Promise(resolve=>{cancel=()=>resolve(false);});this._disposeWaiters.add(cancel);return Promise.race([work,signal]).finally(()=>this._disposeWaiters.delete(cancel));}
   _cpu(callback){const result=callback();this.lastExecution="cpu";return result;}
   _destroy(...buffers){for(const b of buffers)try{b?.destroy();}catch{}}
-  _releaseDevice(device=this.device){if(!device)return;if(this.device===device){this.device=null;this.pipeline=null;this.wavePipeline=null;this._waveInitializing=null;this.adapter=null;}try{device.destroy();}catch{}}
+  _releaseDevice(device=this.device){if(!device)return;this._retireDeviceWaiters(device);if(this.device===device){this.device=null;this.pipeline=null;this.wavePipeline=null;this._waveInitializing=null;this.adapter=null;}try{device.destroy();}catch{}}
   dispose(){if(this._disposed)return;this._disposed=true;for(const cancel of this._disposeWaiters)cancel();this._disposeWaiters.clear();this._releaseDevice();this.status="disposed";}
 }
 function createPipeline(device,module,entryPoint){const descriptor={layout:"auto",compute:{module,entryPoint}};return typeof device.createComputePipelineAsync==="function"?device.createComputePipelineAsync(descriptor):device.createComputePipeline(descriptor);}

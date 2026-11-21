@@ -320,6 +320,24 @@ test("disposal settles pending wave compilation through CPU fallback",async()=>{
     compilation.resolve({messages:[]});await Promise.resolve();await Promise.resolve();assert.equal(backend.wavePipeline,null);
   });
 });
+test("device loss releases concurrent readback waiters",async()=>{
+  const started=deferred(),readback=deferred();let count=0;
+  const execution=mockExecutionDevice(()=>{if(++count===2)started.resolve();return readback.promise;});
+  await withMockGpu({requestAdapter:async()=>({requestDevice:async()=>execution.device})},async()=>{
+    const backend=new WebGPUBackend(),a=backend.minkowskiDotBatch([2,1,0,0],[2,1,0,0]),b=backend.minkowskiDotBatch([3,1,0,0],[3,1,0,0]);
+    await started.promise;assert.equal(backend._deviceWaiters.get(execution.device).size,2);execution.lost.resolve({reason:"unknown"});
+    assert.deepEqual(await Promise.all([a,b]),[[-3],[-8]]);assert.equal(backend._deviceWaiters.size,0);assert.equal(backend._disposeWaiters.size,0);assert.equal(execution.destroyedBuffers(),8);
+    readback.reject(new Error("late readback failure"));await Promise.resolve();backend.dispose();
+  });
+});
+test("completed GPU readbacks remove device-loss waiters",async()=>{
+  const execution=mockExecutionDevice();
+  await withMockGpu({requestAdapter:async()=>({requestDevice:async()=>execution.device})},async()=>{
+    const backend=new WebGPUBackend();
+    for(let i=0;i<128;i++){assert.deepEqual(await backend.minkowskiDotBatch([0,0,0,0],[0,0,0,0]),[0]);assert.equal(backend._deviceWaiters.size,0);assert.equal(backend._disposeWaiters.size,0);}
+    assert.equal(backend.lastExecution,"webgpu");backend.dispose();
+  });
+});
 test("device loss resolves a pending readback through CPU fallback",async()=>{
   const started=deferred(),readback=deferred(),execution=mockExecutionDevice(()=>{started.resolve();return readback.promise;});
   await withMockGpu({requestAdapter:async()=>({requestDevice:async()=>execution.device})},async()=>{
