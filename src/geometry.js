@@ -283,10 +283,14 @@ export class Curvature4 {
 export class Geodesic4 {
   constructor(connection,initialEvent,initialTangent){this.connection=connection;this.eventFrame=initialEvent instanceof Event4?initialEvent.frame:null;this.eventC=initialEvent instanceof Event4?initialEvent.c:undefined;this.initialEvent=initialEvent instanceof Event4?initialEvent.position:initialEvent;this.initialTangent=initialTangent;const event=parseGeometryBatch(this.initialEvent,"initial event",[4]),tangent=parseGeometryBatch(this.initialTangent,"initial tangent",[4]);if(JSON.stringify(event.shape)!==JSON.stringify(tangent.shape))throw new RangeError("initial_event and initial_tangent must have matching (...,4) shapes");this.initialEvent=event.data;this.initialTangent=tangent.data;}
   integrate(span,{steps=100,format="samples"}={}){if(!["samples","components"].includes(format))throw new TypeError("format must be 'samples' or 'components'");const parameterSpan=vector(span,2,"parameter span"),event=parseGeometryBatch(this.initialEvent,"initial event",[4]),tangent=parseGeometryBatch(this.initialTangent,"initial tangent",[4]),batchShape=event.shape.slice(0,-1),state=geometryBuildBatch(batchShape,index=>[...geometryBatchGet(event.data,batchShape,index,batchShape),...geometryBatchGet(tangent.data,batchShape,index,batchShape)]),rows=integrateRK4((parameter,current)=>geometryBuildBatch(batchShape,index=>{const sample=geometryBatchGet(current,batchShape,index,batchShape);return [...sample.slice(4),...this.connection.geodesicAcceleration(sample.slice(0,4),sample.slice(4))];}),state,parameterSpan[0],parameterSpan[1],steps),samples=rows.map(([parameter,current])=>({parameter,event:new Event4(geometryBuildBatch(batchShape,index=>geometryBatchGet(current,batchShape,index,batchShape).slice(0,4)),this.eventFrame,this.eventC),tangent:geometryBuildBatch(batchShape,index=>geometryBatchGet(current,batchShape,index,batchShape).slice(4))}));return format==="samples"?samples:[samples.map(sample=>sample.parameter),samples.map(sample=>sample.event.position),samples.map(sample=>sample.tangent)];}
+  _validateForwardSensitivityConnection(){
+    if(!(this.connection instanceof Connection4)||this.connection.metricDerivative!=="forward")throw new TypeError("forward endpoint sensitivity requires a Connection4 configured with metricDerivative forward");
+    for(const name of ["christoffel","christoffelForward","_christoffelForwardScalar","geodesicAcceleration"])if(this.connection[name]!==Connection4.prototype[name])throw new TypeError("forward endpoint sensitivity requires the standard metric connection");
+  }
   /** Endpoint and its derivative with respect to the initial tangent. */
   endpointSensitivityForward(span,{steps=100}={}){
     if(this.initialEvent.length!==4||this.initialTangent.length!==4||this.initialEvent.some(Array.isArray)||this.initialTangent.some(Array.isArray))throw new RangeError("endpoint sensitivity requires unbatched four-vectors");
-    if(!(this.connection instanceof Connection4))throw new TypeError("forward endpoint sensitivity requires a Connection4");
+    this._validateForwardSensitivityConnection();
     if(!Number.isInteger(steps)||steps<1||steps>2000)throw new RangeError("endpoint sensitivity steps must be an integer from 1 to 2000");
     const interval=vector(span,2,"parameter span"),initial=[...this.initialEvent,...this.initialTangent,...Array(16).fill(0),...identity(4).flat()];
     const rows=integrateRK4((_parameter,state)=>{
@@ -306,6 +310,7 @@ export class Geodesic4 {
   solveBoundary(targetEvent,span,{steps=100,iterations=12,maxIterations=iterations,tolerance=1e-9,damping=1e-10,format="samples",jacobianMethod="finite"}={}){
     if(!["samples","components"].includes(format))throw new TypeError("format must be 'samples' or 'components'");
     if(!["finite","forward"].includes(jacobianMethod))throw new TypeError("jacobianMethod must be finite or forward");
+    if(jacobianMethod==="forward")this._validateForwardSensitivityConnection();
     if(this.initialEvent.length!==4||this.initialTangent.length!==4||this.initialEvent.some(value=>Array.isArray(value))||this.initialTangent.some(value=>Array.isArray(value)))throw new RangeError("boundary shooting requires unbatched four-vectors");
     if(!Number.isInteger(steps)||steps<1||steps>2000)throw new RangeError("boundary solve steps must be an integer from 1 to 2000");
     if(!Number.isInteger(maxIterations)||maxIterations<0||maxIterations>12)throw new RangeError("boundary solve maxIterations must be an integer from 0 to 12");

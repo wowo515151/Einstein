@@ -254,7 +254,17 @@ test("forward endpoint sensitivities agree with perturbations for a coupled metr
 
 
 test("forward boundary sensitivity works when tangent perturbations collapse",()=>{
-  const flat=()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],geodesic=new Geodesic4(new Connection4(flat),[0,0,0,0],[2**53,0,0,0]),span=[0,1e-15],options={steps:4,maxIterations:3,tolerance:1e-8,damping:1e-40,format:"components"};
+  const flat=()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],geodesic=new Geodesic4(new Connection4(flat,{metricDerivative:"forward"}),[0,0,0,0],[2**53,0,0,0]),span=[0,1e-15],options={steps:4,maxIterations:3,tolerance:1e-8,damping:1e-40,format:"components"};
   assert.throws(()=>geodesic.solveBoundary([10,0,0,0],span,{...options,jacobianMethod:"finite"}),/distinct finite stencil points/);
   const result=geodesic.solveBoundary([10,0,0,0],span,{...options,jacobianMethod:"forward"});assert.ok(Math.abs(result[1].at(-1)[0]-10)<1e-8);
+});
+
+
+test("forward endpoint sensitivity requires the same standard forward connection as the trajectory",()=>{
+  const flat=()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],event=[0,0,0,0],tangent=[1,0,0,0];
+  const finite=new Geodesic4(new Connection4(flat),event,tangent);
+  assert.throws(()=>finite.endpointSensitivityForward([0,1]),/metricDerivative forward/);
+  assert.throws(()=>finite.solveBoundary([0,0,0,0],[0,1],{jacobianMethod:"forward"}),/metricDerivative forward/);
+  const custom=new Connection4(flat,{metricDerivative:"forward"});custom.geodesicAcceleration=()=>[0,0,0,0];
+  assert.throws(()=>new Geodesic4(custom,event,tangent).endpointSensitivityForward([0,1]),/standard metric connection/);
 });
