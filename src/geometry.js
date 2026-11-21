@@ -58,6 +58,17 @@ export class DifferentialOperators4 {
   gradientForward(fn,x){return this._mapPoints(x,p=>{const field=forwardJacobian4(fn,p);if(typeof field.value!=="number")throw new TypeError("gradient requires a scalar field");const result=mvec(inverse(this._g(p)),field.jacobian);if(result.some(value=>!Number.isFinite(value)))throw new RangeError("gradient is non-finite");return result;},16);}
   gradient(fn,x){return this._mapPoints(x,p=>{const result=mvec(inverse(this._g(p)),this._partialScalar(fn,p));if(result.some(value=>!Number.isFinite(value)))throw new RangeError("gradient is non-finite");return result;},16);}
   divergence(fn,x){return this._mapPoints(x,p=>{const v=vector(fn(p)),d=this._jacobianScalar(fn,p),gamma=this.connection.christoffel(p);let out=0;for(let a=0;a<4;a++){out+=d[a][a];for(let b=0;b<4;b++)out+=gamma[a][a][b]*v[b];}if(!Number.isFinite(out))throw new RangeError("divergence is non-finite");return out;},128);}
+  exteriorDerivativeForward(form,x){return this._mapPoints(x,p=>{
+    const differentiated=forwardJacobian4(form,p),shape=tensorShape(differentiated.value),rank=shape.length,inputComponents=shape.reduce((product,size)=>product*size,1),outputComponents=inputComponents*4;
+    if(5*inputComponents+outputComponents>MAX_COVARIANT_COMPONENTS)throw new RangeError("exterior derivative exceeds the bounded forward-mode work limit");
+    const out=zeroTensor([4,...shape]);
+    eachIndex(rank+1,indices=>{
+      let total=0;
+      for(let position=0;position<=rank;position++){const derivativeIndex=indices[position],formIndices=indices.filter((_,axis)=>axis!==position),term=tensorValue(differentiated.jacobian,[...formIndices,derivativeIndex]);total+=(position%2===0?1:-1)*term;}
+      if(!Number.isFinite(total))throw new RangeError("exterior derivative is non-finite");setTensorValue(out,indices,total);
+    });
+    return out;
+  },(_value,components)=>3*components);}
   exteriorDerivative(form,x){return this._mapPoints(x,p=>this._exteriorDerivativeScalar(form,p),(_value,components)=>3*components);}
   _exteriorDerivativeScalar(form,p){
     const value=form(p),shape=tensorShape(value),rank=shape.length,inputComponents=shape.reduce((product,size)=>product*size,1),outputComponents=inputComponents*4;

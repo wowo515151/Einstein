@@ -91,3 +91,13 @@ test("forward covariant derivatives handle upper and lower indices and batches",
   assert.throws(()=>connection.covariantDerivativeForward(upper,points,["up","down"]),/indexTypes length/);
   assert.throws(()=>connection.covariantDerivativeForward(upper,points,["invalid"]),/indexTypes/);
 });
+
+
+test("forward exterior derivatives preserve form signs and batches",()=>{
+  const op=new DifferentialOperators4(),form=p=>[0,p[0].multiply(p[2]),p[1].sin(),p[3].pow(2)],points=[[2,.3,4,1],[3,.5,5,2]],result=op.exteriorDerivativeForward(form,points);
+  for(let i=0;i<points.length;i++){const [t,x,y]=points[i],d=result[i];assert.ok(Math.abs(d[0][1]-y)<1e-12);assert.ok(Math.abs(d[2][1]-(t-Math.cos(x)))<1e-12);for(let a=0;a<4;a++)for(let b=0;b<4;b++)assert.ok(Math.abs(d[a][b]+d[b][a])<1e-12);}
+  assert.deepEqual(op.exteriorDerivativeForward(p=>p[0].pow(2),[2,0,0,0]),[4,0,0,0]);
+  const twoForm=p=>{const q=p[2].multiply(p[3]);return [[0,q,0,0],[q.negate(),0,0,0],[0,0,0,0],[0,0,0,0]];},d2=op.exteriorDerivativeForward(twoForm,[0,0,2,3]);
+  assert.equal(d2[2][0][1],3);assert.equal(d2[0][2][1],-3);assert.equal(d2[3][0][1],2);
+  assert.throws(()=>op.exteriorDerivativeForward(()=>[1,2,3],[0,0,0,0]),/length 4/);
+});
