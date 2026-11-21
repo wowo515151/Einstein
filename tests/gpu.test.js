@@ -123,6 +123,25 @@ function mockExecutionDevice(onMapAsync=async()=>{},lost=deferred()){
   return {device,lost,destroyedBuffers:()=>destroyedBuffers};
 }
 
+test("Lorentz batches dispatch all four components through a simulated GPU device",async()=>{
+  const {device}=mockDevice();let bindings,dispatches=0,destroyedBuffers=0,copy;
+  device.createBuffer=({size})=>({data:new ArrayBuffer(size),async mapAsync(){},getMappedRange(){return this.data;},unmap(){},destroy(){destroyedBuffers++;}});
+  device.createBindGroup=({entries})=>entries.map(entry=>entry.resource.buffer);
+  device.queue={writeBuffer(buffer,offset,values){new Uint8Array(buffer.data).set(new Uint8Array(values.buffer,values.byteOffset,values.byteLength),offset);},submit(){
+    dispatches++;const left=new Float32Array(bindings[0].data),right=new Float32Array(bindings[1].data),out=new Float32Array(bindings[2].data);
+    for(let i=0;i<out.length;i++){const j=4*i,terms=[0,1,2,3].map(k=>Math.fround(left[j+k]*right[j+k]));out[i]=Math.fround(Math.fround(Math.fround(-terms[0]+terms[1])+terms[2])+terms[3]);}
+    copy();
+  }};
+  device.createCommandEncoder=()=>({beginComputePass:()=>({setPipeline(){},setBindGroup(_i,b){bindings=b;},dispatchWorkgroups(){},end(){}}),copyBufferToBuffer(a,_a,b,_b){copy=()=>new Uint8Array(b.data).set(new Uint8Array(a.data));},finish(){return {};}});
+  const vectors=[2,0,3,4,1,0,1,1],boost=LorentzTransform.boost([.6,0,0]);
+  await withMockGpu({requestAdapter:async()=>({requestDevice:async()=>device})},async()=>{
+    const backend=new WebGPUBackend(),actual=await lorentzTransformBatch(vectors,boost,{backend:"webgpu",gpu:backend}),expected=await lorentzTransformBatch(vectors,boost,{backend:"cpu"});
+    assert.equal(dispatches,4);assert.equal(backend.lastExecution,"webgpu");assert.equal(destroyedBuffers,16);
+    for(let i=0;i<actual.length;i++)assert.ok(Math.abs(actual[i]-expected[i])<1e-6);
+    backend.dispose();assert.equal(device.destroyed,1);
+  });
+});
+
 test("plane-wave sampling provides CPU fields and validates inputs",async()=>{
   const fields=await samplePlaneWaveBatch([0,0,0,0,0,0,0,Math.PI/2],{backend:"cpu"});
   assert.deepEqual(fields[0],{electric:[1,0,0],magnetic:[0,1,0]});
