@@ -2,6 +2,8 @@
 
 An offline-first JavaScript library and set of interactive 3D demonstrations for special and general relativity. The library is a clean implementation of the mathematical behavior represented by the local Lib4 API; no Python source or bytecode is copied.
 
+**Live visualizations:** [Open the Einstein GitHub Pages site](https://wowo515151.github.io/Einstein/).
+
 ## Help
 
 Start at the [help index](docs/README.md) for conventions, API references, equation references, GPU behavior, examples, visualizations, and limitations.

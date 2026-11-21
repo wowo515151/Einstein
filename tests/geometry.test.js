@@ -466,6 +466,11 @@ test("de Sitter FLRW metric reproduces analytic curvature and comoving geodesics
   assert.ok(Math.abs(gamma[0][1][1]-H*Math.exp(2*H*point[0]))<1e-7);
   const endpoint=new Geodesic4(new Connection4(deSitter),[0,0,0,0],[1,0,0,0]).integrate([0,.5],{steps:32}).at(-1).event.position;
   assert.deepEqual(endpoint,[.5,0,0,0]);
+  for(const steps of [8,16,32]){
+    const solved=new Geodesic4(new Connection4(deSitter,{step:2e-4}),[0,0,0,0],[.8,.1,0,0]).solveBoundary([.5,0,0,0],[0,.5],{steps,maxIterations:8,tolerance:1e-7,damping:1e-8});
+    assert.ok(Math.hypot(...solved.at(-1).event.position.map((value,index)=>value-[.5,0,0,0][index]))<1e-7);
+    assert.ok(Math.hypot(...solved[0].tangent.map((value,index)=>value-[1,0,0,0][index]))<2e-7);
+  }
 });
 
 test("de Sitter differential operators match analytic curved-metric formulas",()=>{
