@@ -216,6 +216,18 @@ function exactDot(left,right,offset){
 
 export async function minkowskiDotBatch(left,right,{backend="auto",gpu=null}={}){if(backend==="cpu")return cpuDots(left,right);if(backend!=="webgpu"&&backend!=="auto")throw new TypeError("backend must be auto, cpu, or webgpu");const instance=gpu??new WebGPUBackend();try{return await instance.minkowskiDotBatch(left,right);}finally{if(gpu==null)instance.dispose();}}
 
+/** Squared Minkowski intervals for flat batches of start and end events. */
+export async function spacetimeIntervalSquaredBatch(start,end,options={}){
+  validateBatch(start,end);
+  const displacement=new Float64Array(start.length);
+  for(let i=0;i<displacement.length;i++){
+    const value=end[i]-start[i];
+    if(!Number.isFinite(value))throw new RangeError("event displacement is non-finite");
+    displacement[i]=value;
+  }
+  return minkowskiDotBatch(displacement,displacement,options);
+}
+
 function validateEvents(events,waveNumber){if(!Array.isArray(events)&&!ArrayBuffer.isView(events))throw new TypeError("events must be a numeric array");if(events.length%4!==0||events.length/4>MAX_BATCH_VECTORS)throw new RangeError("events must be bounded groups of four coordinates");if(!Number.isFinite(waveNumber)||waveNumber<=0)throw new RangeError("waveNumber must be positive and finite");for(const value of events)if(typeof value!=="number"||!Number.isFinite(value))throw new TypeError("events must contain finite coordinates");}
 function fieldsFromAmplitudes(amplitudes){return amplitudes.map(amplitude=>({electric:[amplitude,0,0],magnetic:[0,amplitude,0]}));}
 function cpuPlaneWave(events,waveNumber){const amplitudes=[];for(let i=0;i<events.length;i+=4){const phase=waveNumber*(events[i+3]-events[i]);if(!Number.isFinite(phase))throw new RangeError("plane-wave phase is non-finite");amplitudes.push(Math.cos(phase));}return fieldsFromAmplitudes(amplitudes);}

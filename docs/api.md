@@ -62,7 +62,7 @@ See [Differential geometry](geometry.md) for metric callbacks, finite-difference
 
 `RelativityContext` groups a metric, units, `c`, and `epsilon0` with factories for the common algebra, spacetime, and physics values. Its `setUnits` and `toDevice` return configured contexts; they do not convert existing values or transfer JavaScript arrays to a device. See [Physics and fields](physics.md).
 
-`minkowskiDotBatch` offers an asynchronous CPU or optional WebGPU path for flat batches of four-vectors. `WebGPUBackend` exposes `supported`, `initialize`, `minkowskiDotBatch`, and `dispose` for explicit backend reuse. See [GPU and CPU backends](gpu.md) for fallback behavior, precision, and ownership.
+`minkowskiDotBatch` offers an asynchronous CPU or optional WebGPU path for flat batches of four-vectors. `spacetimeIntervalSquaredBatch` applies the same backend to displacements between paired event batches. `WebGPUBackend` exposes `supported`, `initialize`, `minkowskiDotBatch`, and `dispose` for explicit backend reuse. See [GPU and CPU backends](gpu.md) for fallback behavior, precision, and ownership.
 
 `samplePlaneWaveBatch` samples normalized electric and magnetic plane-wave fields at flat batches of four-coordinate events, using the CPU or the optional WebGPU backend. Its wave model, supported GPU envelope, return values, and fallback behavior are described in [GPU and CPU backends](gpu.md).
 

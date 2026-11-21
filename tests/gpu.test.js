@@ -1,7 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {minkowskiDotBatch,samplePlaneWaveBatch,samplePlaneWaveGrid,WebGPUBackend} from "../src/relativity/index.js";
+import {minkowskiDotBatch,spacetimeIntervalSquaredBatch,samplePlaneWaveBatch,samplePlaneWaveGrid,WebGPUBackend} from "../src/relativity/index.js";
 
+test("batched event intervals use the selected backend and preserve causal signs",async()=>{
+  const start=[0,0,0,0,1,0,0,0,2,1,0,0],end=[2,0,0,0,1,3,0,0,3,2,0,0];
+  assert.deepEqual(await spacetimeIntervalSquaredBatch(start,end,{backend:"cpu"}),[-4,9,0]);
+  let calls=0;const gpu={async minkowskiDotBatch(left,right){calls++;assert.deepEqual(Array.from(left),[2,0,0,0,0,3,0,0,1,1,0,0]);assert.deepEqual(Array.from(left),Array.from(right));return [-4,9,0];}};
+  assert.deepEqual(await spacetimeIntervalSquaredBatch(start,end,{backend:"webgpu",gpu}),[-4,9,0]);assert.equal(calls,1);
+  const screened=new WebGPUBackend();screened.initialize=async()=>{throw new Error("null interval must use CPU before device initialization");};
+  assert.deepEqual(await spacetimeIntervalSquaredBatch([0,0,0,0],[1,1,0,0],{backend:"webgpu",gpu:screened}),[0]);assert.equal(screened.lastExecution,"cpu");screened.dispose();
+  assert.deepEqual(await spacetimeIntervalSquaredBatch([],[],{backend:"cpu"}),[]);
+  await assert.rejects(()=>spacetimeIntervalSquaredBatch([1,2,3],[1,2,3],{backend:"cpu"}),/divisible by four/);
+  await assert.rejects(()=>spacetimeIntervalSquaredBatch([-1e308,0,0,0],[1e308,0,0,0],{backend:"cpu"}),/displacement is non-finite/);
+});
 test("CPU batch dot product handles multiple events",async()=>{
   assert.deepEqual(await minkowskiDotBatch([1,2,0,0,2,1,0,0],[1,2,0,0,2,1,0,0],{backend:"cpu"}),[3,-3]);
 });
