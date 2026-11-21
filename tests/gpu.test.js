@@ -291,6 +291,27 @@ test("pipeline creation failure also destroys and clears the device",async()=>{
   });
 });
 
+test("a delayed device-loss notification retires a GPU execution failure",async()=>{
+  const execution=mockExecutionDevice(),expected=await minkowskiDotBatch([2,1,0,0],[2,1,0,0],{backend:"cpu"});
+  execution.device.queue.submit=()=>{throw new Error("GPU submission failed");};
+  await withMockGpu({requestAdapter:async()=>({requestDevice:async()=>execution.device})},async()=>{
+    const backend=new WebGPUBackend();
+    assert.deepEqual(await backend.minkowskiDotBatch([2,1,0,0],[2,1,0,0]),expected);
+    assert.equal(backend.lastExecution,"cpu");
+    assert.equal(backend.status,"failed");
+    assert.equal(backend.device,null);
+    assert.equal(backend.error.message,"GPU submission failed");
+    assert.equal(execution.device.destroyed,1);
+    assert.equal(execution.destroyedBuffers(),4);
+
+    execution.lost.resolve({reason:"unknown"});
+    await Promise.resolve();
+    assert.equal(backend.status,"lost");
+    assert.equal(backend._retiredFailureDevice,null);
+    backend.dispose();
+  });
+});
+
 test("asynchronous pipeline failures trigger the correct fallback",async()=>{
   const first=mockDevice().device,second=mockExecutionDevice().device;let requests=0;
   first.createComputePipelineAsync=async()=>{throw new Error("async dot pipeline failed");};
