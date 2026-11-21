@@ -247,16 +247,16 @@ function scenePoints(sceneId, time, beta, observerFrame = "lab") {
     const mu = .008 + .045 * beta;
     const softening = .35;
     const metric = ([, x, y, z]) => {
-      const phi = -mu / Math.sqrt(x * x + y * y + z * z + softening * softening);
-      return [
-        [-(1 + 2 * phi), 0, 0, 0],
-        [0, 1 - 2 * phi, 0, 0],
-        [0, 0, 1 - 2 * phi, 0],
-        [0, 0, 0, 1 - 2 * phi],
-      ];
+      // Connection4 supplies Dual4 coordinates for the forward derivative path.
+      const phi = typeof x === "number"
+        ? -mu / Math.sqrt(x * x + y * y + z * z + softening * softening)
+        : x.multiply(x).add(y.multiply(y)).add(z.multiply(z)).add(softening * softening).sqrt().pow(-1).multiply(-mu);
+      const temporal = typeof phi === "number" ? -(1 + 2 * phi) : phi.multiply(2).add(1).negate();
+      const spatial = typeof phi === "number" ? 1 - 2 * phi : phi.multiply(-2).add(1);
+      return [[temporal, 0, 0, 0], [0, spatial, 0, 0], [0, 0, spatial, 0], [0, 0, 0, spatial]];
     };
     if (!geodesicCache || geodesicCache.beta !== beta) {
-      const connection = new Connection4(metric, { step: 2e-4 });
+      const connection = new Connection4(metric, { metricDerivative: "forward" });
       const paths = [];
       for (let ray = 0; ray < 8; ray++) {
         const angle = ray * PI2 / 8;

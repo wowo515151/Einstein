@@ -404,6 +404,9 @@ test("weak-field lensing scene traces a bounded 3D bundle of bent null geodesics
     radii.add(ray[0].impactParameter);
     assert.ok(ray.every((row) => row.tangent.every(Number.isFinite)));
     assert.ok(ray.every((row) => Math.abs(row.metricNorm) < 3e-6));
+    const conservedEnergy = row => (1 - 2 * (.008 + .045 * .8) / Math.hypot(row.x, row.y, row.z, .35)) * row.tangent[0];
+    const initialEnergy = conservedEnergy(ray[0]);
+    assert.ok(ray.every(row => Math.abs(conservedEnergy(row) - initialEnergy) < 3e-6));
     assert.ok(ray.at(-1).x > ray[0].x + 5);
     const [dy, dz] = ray[0].impactDirection;
     const inwardDeflection = ray.at(-1).tangent[2] * dy + ray.at(-1).tangent[3] * dz;

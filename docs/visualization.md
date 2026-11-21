@@ -29,3 +29,5 @@ Reset scene pauses playback and restores the default time, model parameter, obse
 The analytic embedding helper returns the flat far-field limit when its Gaussian profile underflows, including at finite coordinates whose squared radius overflows. The displayed grid uses a much smaller bounded range.
 
 The light-cone readout classifies representative interior and exterior events as well as the sphere surface. At the apex it labels the origin as coincident and samples a nonzero spatial separation. Classifications use the library tolerance.
+
+The weak-field lensing scene integrates null geodesics using explicit forward metric derivatives and fixed-step RK4. Its synthetic ray-bundle checks bound both null-norm drift and drift of the static metric’s conserved energy; this does not establish live rendering accuracy or make the softened teaching metric an exact black-hole solution.
