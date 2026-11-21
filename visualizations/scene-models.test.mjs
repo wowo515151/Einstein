@@ -356,6 +356,19 @@ test("charged-particle path integrates the library Lorentz force and preserves f
   }
 });
 
+test("uniform magnetic-field particle paths match the analytic circular orbit",()=>{
+  for(const beta of [.1,.6,.95]){
+    const gamma=1/Math.sqrt(1-beta*beta),radius=gamma*beta;
+    const rows=buildSceneData("particle",{beta,time:1});
+    for(const row of rows){
+      const tau=row.parameter,expected=[radius*Math.sin(tau),radius*(Math.cos(tau)-1),0],velocity=[gamma,radius*Math.cos(tau),-radius*Math.sin(tau),0];
+      for(let i=0;i<3;i++)assert.ok(Math.abs([row.x,row.y,row.z][i]-expected[i])<1e-7,`position mismatch at beta ${beta}, parameter ${tau}`);
+      for(let i=0;i<4;i++)assert.ok(Math.abs(row.fourVelocity[i]-velocity[i])<1e-7,`velocity mismatch at beta ${beta}, parameter ${tau}`);
+      assert.ok(Math.abs(row.ct-gamma*tau)<1e-10);
+    }
+  }
+});
+
 test("weak-field lensing scene traces a bounded 3D bundle of bent null geodesics", () => {
   const start = buildSceneData("geodesic", { beta: .8, time: 0 });
   assert.equal(start.length, 8);
