@@ -146,6 +146,21 @@ test("retarded fields resolve small nonzero separations near the origin",()=>{
     assert.ok(Math.abs(potential[0]*distance*4*Math.PI-1)<1e-12);
   }
 });
+test("batched electromagnetic four-forces are orthogonal to four-velocity",()=>{
+  const field=EMFieldTensor.fromEB([[1,.2,-.3],[-.2,.7,.1]],[[.4,-.3,.5],[.6,.1,-.2]],{c:1});
+  const velocity=FourVelocity.fromVelocity3([[.2,.1,0],[-.1,.3,.2]],1).components,covariant=velocity.map(row=>[-row[0],...row.slice(1)]);
+  const force=field.lorentzForce([1.2,-.7],covariant);
+  for(let n=0;n<2;n++){const contraction=force[n].reduce((sum,value,i)=>sum+value*covariant[n][i],0);assert.ok(Math.abs(contraction)<1e-13);}
+});
+test("electromagnetic outputs handle overflow and invalid metric batches",()=>{
+  const field=new EMFieldTensor([[0,1e200,0,0],[-1e200,0,0,0],[0,0,0,0],[0,0,0,0]],{c:1});
+  const force=field.lorentzForce(1e-200,[0,1e200,0,0]);assert.ok(Math.abs(force[0]/1e200-1)<1e-14);assert.deepEqual(force.slice(1),[0,0,0]);
+  assert.deepEqual(field.lorentzForce(0,[0,1e200,0,0]),[0,0,0,0]);
+  assert.throws(()=>field.lorentzForce(1,[0,1e200,0,0]),/Lorentz force is non-finite/);
+  assert.throws(()=>field.electricField(1e200),/electric field is non-finite/);
+  const metric=Metric4.minkowski({batchShape:[2]});metric.components.push(Metric4.minkowski().components);
+  assert.throws(()=>field.energyMomentumTensor(metric),/metric batch shape cannot change/);
+});
 test("mechanics transforms reject reshaped Lorentz matrices",()=>{
   const transform=LorentzTransform.identity({batchShape:[2]});transform.matrix.push(LorentzTransform.identity().matrix);
   const current=FourCurrent.fromChargeCurrent(1,[0,0,0],{c:1}),field=EMFieldTensor.fromEB([1,0,0],[0,1,0],{c:1});
