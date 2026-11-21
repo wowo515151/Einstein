@@ -31,6 +31,20 @@ test("batched Lorentz transforms use the CPU or a shared screened backend",async
   await assert.rejects(()=>lorentzTransformBatch(vectors,[[2,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],{backend:"cpu"}),/preserve the Minkowski metric/);
   await assert.rejects(()=>lorentzTransformBatch(vectors,LorentzTransform.identity({batchShape:[1]}),{backend:"cpu"}),/one Lorentz matrix/);
 });
+test("non-collinear Lorentz batches follow the analytic boost and preserve intervals",async()=>{
+  const events=Array.from({length:128},(_,i)=>[2+Math.sin(i*.17),Math.cos(i*.23),Math.sin(i*.31),Math.cos(i*.11)]).flat(),zeros=new Float64Array(events.length);
+  for(const velocity of [[.2,.3,-.1],[-.4,.15,.25],[.3,-.5,.2]]){
+    const beta2=velocity.reduce((sum,v)=>sum+v*v,0),gamma=1/Math.sqrt(1-beta2),boost=LorentzTransform.boost(velocity);
+    const transformed=await lorentzTransformBatch(events,boost,{backend:"cpu"});
+    for(let i=0;i<events.length;i+=4){
+      const [t,x,y,z]=events.slice(i,i+4),spatial=[x,y,z],projection=spatial.reduce((sum,v,j)=>sum+v*velocity[j],0);
+      const expected=[gamma*(t-projection),...spatial.map((v,j)=>v+((gamma-1)*projection/beta2-gamma*t)*velocity[j])];
+      for(let j=0;j<4;j++)assert.ok(Math.abs(transformed[i+j]-expected[j])<1e-12);
+    }
+    const before=await spacetimeIntervalSquaredBatch(zeros,events,{backend:"cpu"}),after=await spacetimeIntervalSquaredBatch(zeros,transformed,{backend:"cpu"});
+    for(let i=0;i<before.length;i++)assert.ok(Math.abs(before[i]-after[i])<1e-11);
+  }
+});
 test("CPU batch dot product handles multiple events",async()=>{
   assert.deepEqual(await minkowskiDotBatch([1,2,0,0,2,1,0,0],[1,2,0,0,2,1,0,0],{backend:"cpu"}),[3,-3]);
 });
