@@ -70,3 +70,5 @@ Invariant mass normalizes momentum before division when individual component-to-
 `FourVelocity.validate({atol,rtol})` uses an absolute plus relative mass-shell tolerance. At very small `c`, a large absolute tolerance relative to `c²` can admit a null or otherwise off-shell vector; choose tolerances appropriate to the units and scale. If `c²` underflows to zero and normalizing components overflows, representable absolute comparisons are retained when the absolute tolerance is at least the smallest normal number.
 
 When a Maxwell electric update overflows an intermediate term, evolution retries with scaled current and wave terms, and rejects a non-finite resulting electric field. This recovers selected finite updates but does not guarantee preservation of every extreme cancellation.
+
+Maxwell evolution and residual APIs reject non-finite output grids, including magnetic histories and scalar constraint residuals. Intermediate overflow can still prevent a representable final result.

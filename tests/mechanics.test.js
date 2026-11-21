@@ -86,6 +86,16 @@ test("Maxwell current coupling survives an unrepresentable inverse permittivity"
   assert.ok(Math.abs(E[1][0][0][0][0]+.1)<1e-12);
   assert.ok(Math.abs(solver.maxwellResiduals(E,B,{...options,current}).ampere[0][0][0][0][0])<1e-12);
 });
+test("Maxwell residual APIs reject non-finite diagnostic results",()=>{
+  const grid=()=>Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[0,0,0])));
+  const current=Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[1e308,1e308,0,0])));
+  const solver=new MaxwellEquations({c:1,epsilon0:.1}),options={spacing:[1,1,1],dt:.01,current};
+  assert.throws(()=>solver.maxwellResiduals([grid(),grid()],[grid()],options),/Maxwell grid result is non-finite/);
+  assert.throws(()=>solver.constraintResiduals([grid(),grid()],[grid()],options),/Maxwell grid result is non-finite/);
+  const electric=Array.from({length:2},()=>Array.from({length:2},(_,j)=>Array.from({length:2},()=>[0,0,j*1e308])));
+  const magnetic=Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[-1.75e308,0,0])));
+  assert.throws(()=>solver.evolve(electric,magnetic,{spacing:[1,1,1],dt:.1,steps:1}),/Maxwell grid result is non-finite/);
+});
 test("Maxwell evolution scales a representable current update before overflow",()=>{
   const grid=()=>Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[0,0,0])));
   const current=()=>Array.from({length:2},()=>Array.from({length:2},()=>Array.from({length:2},()=>[1e308,0,0])));
