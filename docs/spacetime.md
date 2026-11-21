@@ -52,4 +52,8 @@
 
 Interval, event and light-cone surface/containment classification apply the tolerance before forming extreme squared scales, so a representable final tolerance need not overflow during calculation. Spatial-slice containment also scales its Euclidean tolerance before comparison. A non-finite final tolerance or slice distance raises an error; near-null classifications remain sensitive to the chosen tolerance and floating-point conditioning.
 
+The scale-aware tolerance uses coordinate components, whose Euclidean magnitude changes under Lorentz boosts. Consequently, classifications close to the tolerance boundary can differ between frames even though the exact interval is invariant. Use an appropriate tolerance and inspect the squared interval for sensitive cases.
+
+Slice–cone intersections use a scaled branch tolerance and reject non-finite final classification or hit-center values. A branch miss retains the documented `hit: false` and NaN center/radius representation.
+
 Light-cone worldline intersections scale the quadratic coefficients before solving, allowing some large finite intersections that previously overflowed. With zero tolerance, tiny nonzero offsets and directions are scaled as well; with nonzero tolerance, extremely small direction scales can still underflow and are rejected. Events are constructed from the scaled roots without forming the affine parameter, which can recover representable events even when that parameter is outside the Float64 range. Near-degenerate roots and event construction remain subject to floating-point limits.

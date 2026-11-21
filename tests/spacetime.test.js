@@ -65,6 +65,17 @@ test("events classify oriented causal separation and calculate proper time/dista
   assert.equal(new SpacetimeInterval([5,3,0,0],{c:1}).properTime(),4);
   assert.equal(new SpacetimeInterval([1,3,0,0],{c:1}).properDistance(),Math.sqrt(8));
 });
+test("event causal relations survive a proper boost and translation",()=>{
+  const origin=new Event4([1,-2,.5,3],null,2),boost=LorentzTransform.boost([.3,-.2,.1]);
+  const transform=new PoincareTransform(boost,[4,-1,2,.5]),transformedOrigin=origin.transform(transform);
+  const cases=[[[3,1,0,0],"future_timelike"],[[-3,1,0,0],"past_timelike"],[[2,2,0,0],"future_null"],[[-2,2,0,0],"past_null"],[[1,2,0,0],"spacelike"],[[0,0,0,0],"coincident"]];
+  for(const [delta,expected] of cases){
+    const event=new Event4(origin.position.map((value,i)=>value+delta[i]),null,2);
+    assert.equal(origin.causalRelation(event),expected);
+    assert.equal(transformedOrigin.causalRelation(event.transform(transform)),expected);
+    assert.ok(Math.abs(origin.intervalTo(event).squared-transformedOrigin.intervalTo(event.transform(transform)).squared)<1e-12);
+  }
+});
 test("Lib4 frozen spacetime value objects reject reassignment",()=>{
   const cases=[
     [new Event4([0,0,0,0]),"c"],
@@ -286,6 +297,33 @@ test("spatial-slice light-cone intersection returns branch-aware sphere data",()
   assert.equal(past.hit,false);assert.ok(Number.isNaN(past.radius));assert.ok(past.center.every(Number.isNaN));
   const apexSlice=new SpatialSlice([0,0,0,0],[1,0,0,0]);
   assert.deepEqual(apexSlice.intersectLightcone(new LightCone([0,0,0,0])),{center:[0,0,0],radius:0,hit:true});
+});
+test("slice-cone branch checks scale extreme coordinate norms",()=>{
+  const future=new LightCone([0,0,0,0],{branch:"future"}),past=new LightCone([0,0,0,0],{branch:"past"});
+  const slice=t=>new SpatialSlice([t,1.7e308,1.7e308,0],[1,0,0,0],{atol:.1});
+  assert.equal(slice(-1e308).intersectLightcone(future).hit,false);
+  assert.equal(slice(1e308).intersectLightcone(past).hit,false);
+  const hit=slice(1e308).intersectLightcone(future);
+  assert.equal(hit.hit,true);assert.equal(hit.radius,1e308);assert.deepEqual(hit.center,[-1.7e308,-1.7e308,0]);
+  const exact=new SpatialSlice([1e308,1.7e308,1.7e308,0],[1,0,0,0],{atol:0});
+  assert.equal(exact.intersectLightcone(future).hit,true);
+  const tooLarge=new SpatialSlice([1.7e308,1.7e308,1.7e308,1.7e308],[1,0,0,0],{atol:.9});
+  assert.throws(()=>tooLarge.intersectLightcone(future),/classification is non-finite/);
+});
+test("moving-frame slice-cone intersections retain center, radius and null surface",()=>{
+  const transform=new PoincareTransform(LorentzTransform.boost([.3,-.2,.1]),[4,-1,2,.5]);
+  const apex=new Event4([0,0,0,0],null,1).transform(transform),origin=new Event4([2,1,-.5,.25],null,1).transform(transform);
+  const normal=transform.applyVector([1,0,0,0]).components;
+  const basis=[[0,1,0,0],[0,0,1,0],[0,0,0,1]].map(axis=>transform.applyVector(axis).components);
+  const slice=new SpatialSlice(origin,normal,{basis,c:1}),cone=new LightCone(apex,{branch:"future",c:1}),intersection=slice.intersectLightcone(cone);
+  assert.equal(intersection.hit,true);assert.ok(Math.abs(intersection.radius-2)<1e-12);
+  intersection.center.forEach((value,i)=>assert.ok(Math.abs(value-[-1,.5,-.25][i])<1e-12));
+  for(const direction of [[1,0,0],[-1,0,0],[0,1,0],[0,0,-1]]){
+    const position=intersection.center.map((value,i)=>value+intersection.radius*direction[i]);
+    const event=slice.embed3D(position);
+    assert.equal(slice.contains(event),true);assert.equal(cone.onSurface(event),true);
+  }
+  assert.equal(slice.intersectLightcone(new LightCone(apex,{branch:"past",c:1})).hit,false);
 });
 test("Hermite worldline reproduces a straight path and tangent",()=>{
   const seg=new WorldlineSegment([0,0,0,0],[2,2,0,0],[1,1,0,0],[1,1,0,0],[0,2]);
