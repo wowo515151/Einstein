@@ -127,6 +127,16 @@ export class EMFieldTensor {
 
 export class MaxwellEquations {
   constructor({c=C,epsilon0=8.8541878128e-12}={}){finiteNumber(c,"c");finiteNumber(epsilon0,"epsilon0");if(c<=0||epsilon0<=0)throw new RangeError("c and epsilon0 must be positive");this.c=c;this.epsilon0=epsilon0;Object.freeze(this);}
+  /** Coordinates for the conventional periodic Yee placement used by the discrete curls. */
+  gridCoordinates({shape,origin=[0,0,0],spacing=[1,1,1]}={}){
+    const dimensions=vector(shape,3,"shape"),start=vector(origin,3,"origin"),delta=vector(spacing,3,"spacing");
+    validateCellShape(dimensions,3);
+    if(dimensions.some(size=>size<2))throw new RangeError("each spatial grid dimension must have at least 2 points");
+    if(delta.some(value=>value<=0))throw new RangeError("spacing must contain positive finite values");
+    for(let axis=0;axis<3;axis++)if(!Number.isFinite(start[axis]+(dimensions[axis]-.5)*delta[axis]))throw new RangeError("grid coordinate is non-finite");
+    const make=offset=>nestedFrom(dimensions,index=>index.map((value,axis)=>start[axis]+(value+offset[axis])*delta[axis]));
+    return {electric:[[.5,0,0],[0,.5,0],[0,0,.5]].map(make),magnetic:[[0,.5,.5],[.5,0,.5],[.5,.5,0]].map(make),charge:make([0,0,0]),magneticDivergence:make([.5,.5,.5])};
+  }
   maxwellResiduals(electricHistory,magneticHalfHistory,{spacing=[1,1,1],dt,current=null}={}){
     const eShape=shapeOf(electricHistory),bShape=shapeOf(magneticHalfHistory);
     if(eShape.length>5){

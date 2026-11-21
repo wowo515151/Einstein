@@ -616,3 +616,15 @@ test("retarded point-charge potential matches Lib4 and rejects invalid trajector
   assert.throws(()=>rf.evaluate([0,0,0,0]),/singular/);
   assert.throws(()=>new RetardedField(()=>[0,0,0],()=>[0,0,0],1,0,{maxIterations:4097}),RangeError);
 });
+
+
+test("Maxwell grid coordinates expose component-specific Yee locations",()=>{
+  const solver=new MaxwellEquations({c:1,epsilon0:1}),grid=solver.gridCoordinates({shape:[2,2,2],origin:[10,20,30],spacing:[2,4,6]});
+  assert.deepEqual(grid.electric.map(component=>component[0][0][0]),[[11,20,30],[10,22,30],[10,20,33]]);
+  assert.deepEqual(grid.magnetic.map(component=>component[0][0][0]),[[10,22,33],[11,20,33],[11,22,30]]);
+  assert.deepEqual(grid.charge[1][1][1],[12,24,36]);assert.deepEqual(grid.magneticDivergence[1][1][1],[13,26,39]);
+  assert.throws(()=>solver.gridCoordinates({shape:[1,2,2]}),/at least 2/);
+  assert.throws(()=>solver.gridCoordinates({shape:[2,2,2],spacing:[1,0,1]}),/positive/);
+  assert.throws(()=>solver.gridCoordinates({shape:[2,2,2],origin:[1e308,0,0],spacing:[1e308,1,1]}),/non-finite/);
+  assert.throws(()=>solver.gridCoordinates({shape:[33,33,33]}),/cell limit/);
+});

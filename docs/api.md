@@ -44,7 +44,7 @@ See [Physics and fields](physics.md) for units, grid layouts, result shapes, and
 | `FourMomentum` | `fromMassVelocity(m,v,c)` constructs momentum. `energy()`, `momentum3()`, `invariantMass()`, and `boost` compute derived values. |
 | `FourCurrent` | `fromChargeCurrent(rho,j,{c})` constructs a current. `chargeDensity()`, `spatialCurrent()`, and `transform` inspect or transform it. |
 | `EMFieldTensor` | `fromEB(E,B,{c,epsilon0})` constructs a field. `electricField`, `magneticField`, `dual`, `transform`, `lorentzForce`, and `energyMomentumTensor` operate on it. `invariants()` returns named values `magneticMinusElectricOverC2` and `electricDotMagnetic`. |
-| `MaxwellEquations` | `evolve(E,B,{spacing,dt,steps,current})` returns `[electricTimes,electricHistory,magneticTimes,magneticHistory]`. `maxwellResiduals`, `constraintResiduals`, and `energyMomentumTensor` provide checks and derived quantities. |
+| `MaxwellEquations` | `evolve(E,B,{spacing,dt,steps,current})` returns `[electricTimes,electricHistory,magneticTimes,magneticHistory]`. `gridCoordinates` provides staggered sample positions; `maxwellResiduals`, `constraintResiduals`, and `energyMomentumTensor` provide checks and derived quantities. |
 | `RetardedField` | Construct from position and velocity functions, charge, a speed bound, and options. `retardedTime` finds the source time; `retardedPotential`, `evaluate`, and `sample` return four-potential values. |
 
 ## Curved geometry
