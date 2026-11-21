@@ -411,6 +411,16 @@ test("de Sitter FLRW metric reproduces analytic curvature and comoving geodesics
   assert.deepEqual(endpoint,[.5,0,0,0]);
 });
 
+test("de Sitter differential operators match analytic curved-metric formulas",()=>{
+  const H=.2,metric=x=>{const a=Math.exp(2*H*x[0]);return [[-1,0,0,0],[0,a,0,0],[0,0,a,0],[0,0,0,a]];};
+  const ops=new DifferentialOperators4(metric,{step:2e-4}),field=x=>x[0]**2+x[1]**2+.5*x[2]**2,vector=x=>[x[0],x[1],0,0];
+  for(const t of [-.3,.3]){
+    const point=[t,.2,-.1,0],factor=Math.exp(-2*H*t),gradient=ops.gradient(field,point),expected=[-2*t,.4*factor,-.1*factor,0];
+    for(let i=0;i<4;i++)assert.ok(Math.abs(gradient[i]-expected[i])<1e-8);
+    assert.ok(Math.abs(ops.divergence(vector,point)-(2+3*H*t))<1e-8);
+    assert.ok(Math.abs(ops.dAlembertian(field,point)-(-2-6*H*t+3*factor))<1e-7);
+  }
+});
 test("de Sitter Riemann components obey the constant-curvature identity",()=>{
   const H=.2,metric=x=>{const a=Math.exp(2*H*x[0]);return [[-1,0,0,0],[0,a,0,0],[0,0,a,0],[0,0,0,a]];};
   const curvature=new Curvature4(metric,{step:2e-4});
