@@ -286,6 +286,26 @@ test("device loss during readback falls back and preserves the lost state",async
   });
 });
 
+test("plane-wave readback loss falls back before a replacement device is used",async()=>{
+  const started=deferred(),readback=deferred(),first=mockExecutionDevice(()=>{started.resolve();return readback.promise;}),second=mockExecutionDevice();let requests=0;
+  await withMockGpu({requestAdapter:async()=>({requestDevice:async()=>++requests===1?first.device:second.device})},async()=>{
+    const backend=new WebGPUBackend(),pending=backend.samplePlaneWaveBatch([0,0,0,0]);
+    await started.promise;first.lost.resolve({reason:"unknown"});
+    assert.deepEqual(await pending,[{electric:[1,0,0],magnetic:[0,1,0]}]);assert.equal(backend.lastExecution,"cpu");assert.equal(first.destroyedBuffers(),4);
+    assert.equal(await backend.initialize(),true);assert.equal(backend.device,second.device);
+    readback.resolve();await Promise.resolve();await Promise.resolve();assert.equal(backend.status,"ready");assert.equal(backend.device,second.device);
+    backend.dispose();
+  });
+});
+test("device loss resolves a pending readback through CPU fallback",async()=>{
+  const started=deferred(),readback=deferred(),execution=mockExecutionDevice(()=>{started.resolve();return readback.promise;});
+  await withMockGpu({requestAdapter:async()=>({requestDevice:async()=>execution.device})},async()=>{
+    const backend=new WebGPUBackend(),pending=backend.minkowskiDotBatch([2,1,0,0],[2,1,0,0]);
+    await started.promise;execution.lost.resolve({reason:"unknown"});
+    assert.deepEqual(await pending,[-3]);assert.equal(backend.status,"lost");assert.equal(backend.lastExecution,"cpu");assert.equal(execution.destroyedBuffers(),4);
+    readback.reject(new Error("late mapping failure"));await Promise.resolve();backend.dispose();
+  });
+});
 test("stale readback failure cannot dispose a reinitialized device",async()=>{
   const lost=deferred(),started=deferred(),readback=deferred();
   const first=mockExecutionDevice(async()=>{started.resolve();return readback.promise;},lost),second=mockDevice();let requests=0;

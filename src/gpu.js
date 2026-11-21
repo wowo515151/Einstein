@@ -140,7 +140,10 @@ export class WebGPUBackend {
       const encoder=dev.createCommandEncoder(),pass=encoder.beginComputePass();
       pass.setPipeline(pipeline);pass.setBindGroup(0,bind);pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();
       encoder.copyBufferToBuffer(out,0,read,0,n*4);dev.queue.submit([encoder.finish()]);
-      await read.mapAsync(GPUMapMode.READ);mapped=true;
+      const mapping=read.mapAsync(GPUMapMode.READ);
+      const completed=dev.lost?await Promise.race([mapping.then(()=>true),dev.lost.then(()=>false)]):(await mapping,true);
+      mapped=completed;
+      if(!completed||this.device!==dev||this._disposed)return fallback();
       const values=Array.from(new Float32Array(read.getMappedRange()).slice());
       if(!values.every(Number.isFinite))return fallback();
       this.lastExecution="webgpu";
