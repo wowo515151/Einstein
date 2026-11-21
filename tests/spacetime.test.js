@@ -90,6 +90,16 @@ test("spacetime intervals use scale-aware tolerance and event constants propagat
   assert.throws(()=>new Event4([0,0,0,0],null,Number.NaN),RangeError);
   assert.throws(()=>new Event4([0,0,0,0]).causalRelation(new Event4([1e308,1e308,0,0])),RangeError);
 });
+test("interval and event classification scale tolerances before extreme squaring",()=>{
+  const origin=new Event4([0,0,0,0]),large=[1e200,1e200,0,0],atol=1e-200;
+  const interval=new SpacetimeInterval(large,{atol});
+  assert.ok(Math.abs(interval.tolerance()/2e200-1)<1e-15);
+  assert.equal(interval.isNull(),true);
+  assert.equal(origin.causalRelation(new Event4(large),{atol}),"future_null");
+  assert.equal(origin.causalRelation(new Event4(large.map(x=>-x)),{atol}),"past_null");
+  assert.equal(new SpacetimeInterval([1e308,1e308,0,0],{atol:0}).isNull(),true);
+  assert.equal(origin.causalRelation(new Event4([1.7e308,1.7e308,0,0]),{atol:0}),"future_null");
+});
 test("events and intervals preserve batch shapes through classification and scalar/batched transforms",()=>{
   const origin=new Event4([0,0,0,0]),events=new Event4([[5,3,0,0],[-5,3,0,0],[3,3,0,0],[-3,3,0,0],[1,3,0,0],[0,0,0,0]]);
   assert.deepEqual(origin.causalRelation(events),["future_timelike","past_timelike","future_null","past_null","spacelike","coincident"]);
@@ -118,6 +128,16 @@ test("light cone contains causal events and samples null points",()=>{
   assert.deepEqual(cone.intersectWorldline([0,2,0,0],[1,0,0,0]),[[2,2,0,0]]);
   assert.throws(()=>cone.intersectWorldline([0,0,0,0],[1,1,0,0]),RangeError);
 });
+test("light-cone classifications retain representable extreme tolerances",()=>{
+  const future=new LightCone([0,0,0,0],{branch:"future",atol:1e-200});
+  const positive=[1e200,1e200,0,0],negative=[-1e200,1e200,0,0];
+  assert.deepEqual(future.onSurface([positive,negative]),[true,false]);
+  assert.deepEqual(future.contains([positive,negative]),[true,false]);
+  const exact=new LightCone([0,0,0,0],{branch:"future",atol:0});
+  assert.equal(exact.onSurface([1e308,1e308,0,0]),true);
+  assert.equal(exact.contains([1e308,1e308,0,0]),true);
+  assert.throws(()=>new LightCone([0,0,0,0]).contains([1e308,1e308,0,0]),/classification is non-finite/);
+});
 test("light-cone directions normalize consistently at extreme finite scales",()=>{
   const cone=new LightCone([0,0,0,0],{branch:"future"});
   const expected=cone.sample([1,1,1],2);
@@ -131,15 +151,29 @@ test("light-cone directions normalize consistently at extreme finite scales",()=
   }
   assert.throws(()=>cone.sample([0,0,0],1),/nonzero/);
 });
-test("light-cone worldline intersection rejects non-finite calculations",()=>{
+test("light-cone worldline intersections scale extreme finite coefficients",()=>{
   for(const branch of ["future","past","both"]){
     const cone=new LightCone([0,0,0,0],{branch});
-    assert.throws(()=>cone.intersectWorldline([0,1e200,0,0],[1,0,0,0]),/non-finite/);
+    const hits=cone.intersectWorldline([0,1e200,0,0],[1,0,0,0]);
+    assert.equal(hits.length,branch==="both"?2:1);
+    for(const hit of hits)assert.ok(Math.abs(Math.abs(hit[0])/1e200-1)<1e-14);
   }
   const cone=new LightCone([0,0,0,0],{branch:"future",atol:0});
-  assert.throws(()=>cone.intersectWorldline([0,1e200,0,0],[1,0,0,0]),/non-finite/);
-  const hit=cone.intersectWorldline([0,1e100,0,0],[1,0,0,0]);
-  assert.equal(hit.length,1);assert.ok(Math.abs(hit[0][0]/1e100-1)<1e-14);
+  const hit=cone.intersectWorldline([0,1e200,0,0],[1e200,0,0,0]);
+  assert.equal(hit.length,1);assert.ok(Math.abs(hit[0][0]/1e200-1)<1e-14);
+  for(const radius of [1e-160,1e-200,1e-308]){
+    const single=cone.intersectWorldline([0,radius,0,0],[1,0,0,0]);
+    const smallDirection=cone.intersectWorldline([0,radius,0,0],[radius,0,0,0]);
+    assert.equal(single.length,1);assert.equal(smallDirection.length,1);
+    assert.ok(Math.abs(single[0][0]/radius-1)<1e-14);
+    assert.ok(Math.abs(smallDirection[0][0]/radius-1)<1e-14);
+  }
+  assert.equal(cone.intersectWorldline([0,1e308,0,0],[1e-308,0,0,0])[0][0],1e308);
+  for(const radius of [1e-300,1e-200,1,1e200,1e300])for(const speed of [1e-100,1,1e100]){
+    const result=cone.intersectWorldline([0,radius,0,0],[speed,.25*speed,0,0]);
+    assert.equal(result.length,1);
+    assert.ok(Math.abs(result[0][0]/(radius/.75)-1)<1e-12,`radius ${radius}, speed ${speed}`);
+  }
 });
 test("light-cone quadratic roots retain the nearby intersection",()=>{
   const cone=new LightCone([0,0,0,0],{branch:"both",atol:0}),speed=1-1e-8;
@@ -150,6 +184,17 @@ test("light-cone quadratic roots retain the nearby intersection",()=>{
     const expected=-1/(direction+Math.sign(direction));
     assert.ok(Math.abs(near[0]-expected)<1e-15);
     assert.ok(Math.abs(Math.abs(near[0])-Math.abs(near[1]))<1e-15);
+  }
+});
+test("translated light cones retain analytic future and past intersections across scales",()=>{
+  for(const radius of [1e-200,1,1e200]){
+    const apex=[3*radius,-2*radius,0,0],origin=[3*radius,-radius,0,0],direction=[2,.5,0,0];
+    for(const [branch,expected] of [["future",3+1/.75],["past",3-1/1.25]]){
+      const hits=new LightCone(apex,{branch,atol:0}).intersectWorldline(origin,direction);
+      assert.equal(hits.length,1);
+      assert.ok(Math.abs(hits[0][0]/radius-expected)<1e-12);
+      assert.ok(Math.abs(Math.abs((hits[0][0]-apex[0])/radius)-Math.abs((hits[0][1]-apex[1])/radius))<1e-12);
+    }
   }
 });
 test("light-cone branch, scaled tolerances, and sampling match Lib4 semantics",()=>{
@@ -224,6 +269,14 @@ test("spatial slice validates future normal and scales containment tolerance",()
   assert.throws(()=>slice.intersectWorldline([1,0,0,0],[0,1,0,0]),/parallel to or contained/);
   const hit=slice.intersectWorldline([1,2,0,0],[1,0,0,0]);
   assert.equal(hit.parameter,-1);assert.deepEqual(hit.event.position,[0,2,0,0]);
+});
+test("spatial slice containment scales an overflowing coordinate norm",()=>{
+  const slice=new SpatialSlice([0,0,0,0],[1,0,0,0]),event=[1e308,1.7e308,1.7e308,0];
+  assert.equal(slice.contains(event,{atol:.1}),false);
+  assert.equal(slice.contains(event,{atol:.5}),true);
+  assert.equal(slice.contains(event,{atol:0}),false);
+  assert.deepEqual(slice.contains([event,[0,1.7e308,1.7e308,0]],{atol:.1}),[false,true]);
+  assert.throws(()=>slice.contains(event,{atol:1}),/classification is non-finite/);
 });
 test("spatial-slice light-cone intersection returns branch-aware sphere data",()=>{
   const slice=new SpatialSlice([2,0,0,0],[1,0,0,0]);

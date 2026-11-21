@@ -49,3 +49,7 @@
 | `frame.toGlobalTransform`, `frame.fromGlobalTransform`, `frame.relativeTransform(other)` | `PoincareTransform` values; the first two are getters. |
 | `frame.toGlobal(position)`, `frame.fromGlobal(position)`, `frame.transformEvent(event)` | Objects containing transformed `position` arrays. |
 | `frame.transformVector(vector)` | A transformed `Vector4` without translation. |
+
+Interval, event and light-cone surface/containment classification apply the tolerance before forming extreme squared scales, so a representable final tolerance need not overflow during calculation. Spatial-slice containment also scales its Euclidean tolerance before comparison. A non-finite final tolerance or slice distance raises an error; near-null classifications remain sensitive to the chosen tolerance and floating-point conditioning.
+
+Light-cone worldline intersections scale the quadratic coefficients before solving, allowing some large finite intersections that previously overflowed. With zero tolerance, tiny nonzero offsets and directions are scaled as well; with nonzero tolerance, extremely small direction scales can still underflow and are rejected. Events are constructed from the scaled roots without forming the affine parameter, which can recover representable events even when that parameter is outside the Float64 range. Near-degenerate roots and event construction remain subject to floating-point limits.
