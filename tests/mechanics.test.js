@@ -176,6 +176,8 @@ test("four-momentum broadcasts mass and velocity batches through observables and
 });
 test("retarded-time rejects a bracket inconsistent with source motion",()=>{
   const velocity=()=>[.5,0,0],position=t=>[.5*t,0,0],event=[0,1,0,0];
+  const configured=new RetardedField(position,velocity,1,.5,{c:1,epsilon0:1,maxIterations:32,tolerance:1e-8});assert.equal(configured.maxIterations,32);assert.equal(configured.tolerance,1e-8);
+  assert.throws(()=>new RetardedField(position,velocity,1,.5,{tolerence:1e-8}),/unknown RetardedField option "tolerence"/);
   const bad=new RetardedField(position,velocity,1,0,{c:1,epsilon0:1,tolerance:1e-12});
   assert.throws(()=>bad.retardedTime(event),/bracket does not contain a root/);
   const bounded=new RetardedField(position,velocity,1,.5,{c:1,epsilon0:1,tolerance:1e-12});

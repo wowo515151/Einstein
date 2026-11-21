@@ -52,7 +52,7 @@ When a `Metric4` instance is supplied, the context creates a validated metric wr
 | `solver.maxwellResiduals(electric,magnetic,{spacing,dt,current})` | `{ampere,faraday}` discrete residual histories; use the same spacing, timestep, and current as the evolution. |
 | `solver.constraintResiduals(electric,magnetic,{spacing,dt,current})` | `{gauss_e,gauss_b}` constraint histories, including charge continuity from the supplied current. |
 | `solver.energyMomentumTensor(field,metric)` | Stress-energy component arrays; field and solver constants must match. |
-| `new RetardedField(positionAtTime,velocityAtTime,charge,maxSpeed,{c,epsilon0,maxIterations,tolerance})` | A point-charge potential model. Callbacks accept scalar time and return spatial triples. `maxIterations` defaults to `96` and must be an integer from `1` to `4096`; `tolerance` defaults to `1e-12` and must be positive and finite. |
+| `new RetardedField(positionAtTime,velocityAtTime,charge,maxSpeed,{c,epsilon0,maxIterations,tolerance})` | A point-charge potential model. Callbacks accept scalar time and return spatial triples. Only the listed option names are accepted; unknown or misspelled names throw. `maxIterations` defaults to `96` and must be an integer from `1` to `4096`; `tolerance` defaults to `1e-12` and must be positive and finite. |
 | `field.retardedTime(event)` | Retarded time as a number or batch for event coordinates shaped `(...,4)`. |
 | `field.retardedPotential(event)`, `field.evaluate(event)`, `field.sample(events)` | Contravariant four-potential components `(φ/c,A)` with leading event batches preserved. |
 
