@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="./visualizations.css">
 </head>
 <body>
-  <a class="skip-link" href="#scene">Skip to visualization</a>
+  <a class="skip-link" id="skip-to-scene" href="#scene">Skip to visualization</a>
   <header class="masthead">
     <nav aria-label="Project navigation"><a href="../index.html">All visualizations</a> · <a href="../docs/README.html">Library help</a></nav>
     <p class="eyebrow">RELATIVITY · INTERACTIVE LAB</p>
@@ -37,7 +37,7 @@
           </div>
           <div id="renderer-fallback" class="renderer-fallback" role="note" hidden>
             <strong>3D renderer unavailable</strong>
-            <span>This offline page bundles Three.js r128 and OrbitControls. Rendering needs JavaScript modules and WebGL; the model controls and scientific readouts remain available if the renderer cannot start. No remote scripts or libraries are requested.</span>
+            <span>This offline page bundles Three.js r128 and OrbitControls. Rendering needs JavaScript modules and WebGL; the model controls, playback, and scientific readouts remain available if the renderer cannot start. No remote scripts or libraries are requested.</span>
           </div>
         </div>
         <p class="hint">When the 3D scene is available, focus it and use arrow keys to orbit or plus and minus to zoom.</p>
@@ -57,7 +57,7 @@
           <p id="time-hint" class="hint">Drag the slider or use the arrow keys to move through the model.</p>
           <div class="button-row">
             <button id="play-button" type="button" aria-pressed="false">Play animation</button>
-            <button id="reset-button" type="button">Reset view</button>
+            <button id="reset-button" type="button">Reset scene</button>
           </div>
           <label class="parameter-control" for="speed-slider"><span>Model parameter</span><output id="speed-output" for="speed-slider">0.60</output></label>
           <input id="speed-slider" type="range" min="0.05" max="0.95" value="0.6" step="0.01">

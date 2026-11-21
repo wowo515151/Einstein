@@ -29,11 +29,10 @@ let beta = Number(speedSlider.value);
 let observerFrame = "lab";
 let viewer;
 let pageClosed = false;
-let animationEnabled = false;
 let currentRows = [];
 const playback = createPlaybackController({
   reducedMotion: () => prefersReducedMotion.matches,
-  available: () => animationEnabled && Boolean(viewer),
+  available: () => !pageClosed,
   now: () => performance.now(),
   onChange(playing) {
     playButton.setAttribute("aria-pressed", String(playing));
@@ -423,7 +422,6 @@ async function mountScene() {
       await viewer.update({ sceneId: activeScene.id, rows: currentData(), time, beta, observerFrame });
     }
     if (pageClosed) return;
-    animationEnabled = true;
     updateSceneLabel();
     status.textContent = runtime.OrbitControls ? "3D scene ready · library operations connected." : "3D scene ready · camera orbit controls unavailable.";
   } catch (error) {
@@ -433,7 +431,6 @@ async function mountScene() {
     updateSceneLabel();
     fallback.hidden = false;
     status.textContent = `3D renderer could not start: ${error.message}`;
-    animationEnabled = false;
   }
 }
 
@@ -478,7 +475,7 @@ function startAnimation() {
     return;
   }
   if (result === "unavailable") {
-    status.textContent = "Animation is unavailable until the local 3D runtime is loaded.";
+    status.textContent = "Animation is unavailable after this page closes.";
   }
 }
 
@@ -500,7 +497,15 @@ byId("scene").addEventListener("keydown", event => {
   try { if (moveCameraWithKey(viewer, event.key)) event.preventDefault(); }
   catch (error) { status.textContent = `Camera control failed: ${error.message}`; }
 });
-window.addEventListener("hashchange", () => selectScene(sceneFromFragment(location.hash)));
+byId("skip-to-scene").addEventListener("click", event => {
+  event.preventDefault();
+  const target = byId("scene");
+  target.focus({ preventScroll: true });
+  target.scrollIntoView({ block: "start" });
+});
+window.addEventListener("hashchange", () => {
+  if (location.hash !== "#scene") selectScene(sceneFromFragment(location.hash));
+});
 speedSlider.addEventListener("input", () => { beta = Number(speedSlider.value); updateRows(); });
 observerFrameSelect.addEventListener("change", () => { observerFrame = observerFrameSelect.value; updateRows(); });
 playButton.addEventListener("click", () => playButton.getAttribute("aria-pressed") === "true" ? stopAnimation() : startAnimation());
@@ -510,6 +515,7 @@ byId("inspect-sample").addEventListener("click", () => {
   catch (error) { byId("selection-readout").textContent = error.message; }
 });
 byId("reset-button").addEventListener("click", () => {
+  stopAnimation();
   time = 0;
   playback.seek(0);
   beta = .6;

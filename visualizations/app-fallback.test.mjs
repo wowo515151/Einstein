@@ -18,7 +18,8 @@ class Element {
   removeAttribute(name){delete this.attributes[name];}
   addEventListener(name,callback){(this.listeners[name]??=[]).push(callback);}
   removeEventListener(name,callback){this.listeners[name]=(this.listeners[name]??[]).filter(item=>item!==callback);}
-  focus(){}
+  focus(){this.focused=true;}
+  scrollIntoView(){this.scrolledIntoView=true;}
   getBoundingClientRect(){return {left:0,top:0,width:640,height:480};}
   getContext(kind){return kind==="2d"?{measureText:()=>({width:16}),fillRect(){},strokeRect(){},fillText(){}}:null;}
   emit(name,extra={}){for(const callback of this.listeners[name]??[])callback({target:this,currentTarget:this,preventDefault(){},...extra});}
@@ -31,8 +32,8 @@ test("application fallback supports keyboard sample inspection and scene changes
   const byId=id=>{const element=elements.get(id);assert.ok(element,`missing element ${id}`);return element;};
   byId("speed-slider").value="0.6";byId("time-slider").value="0";byId("sample-number").value="1";
   byId("observer-frame").options=[new Element("option"),new Element("option")];
-  const windowStub=new Element(),locationStub={hash:""};
-  const replacements={document:{getElementById:byId,createElement:tag=>new Element(tag)},window:windowStub,location:locationStub,history:{replaceState(_a,_b,url){locationStub.hash=url;}},matchMedia:()=>({matches:false,addEventListener(){}})};
+  const windowStub=new Element(),locationStub={hash:""};let clock=0,scheduled;
+  const replacements={document:{getElementById:byId,createElement:tag=>new Element(tag)},window:windowStub,location:locationStub,history:{replaceState(_a,_b,url){locationStub.hash=url;}},matchMedia:()=>({matches:false,addEventListener(){}}),performance:{now:()=>clock},setInterval(callback){scheduled=callback;return 1;},clearInterval(){scheduled=undefined;}};
   const previous=new Map(Object.keys(replacements).map(name=>[name,Object.getOwnPropertyDescriptor(globalThis,name)]));
   const runtimeDescriptor=Object.getOwnPropertyDescriptor(globalThis,"EINSTEIN_THREE_RUNTIME");
   try {
@@ -42,6 +43,13 @@ test("application fallback supports keyboard sample inspection and scene changes
     assert.equal(byId("renderer-fallback").hidden,false);
     assert.match(byId("scene-status").textContent,/unavailable/);
     assert.equal(byId("scene-list").querySelectorAll("button").length,10);
+    byId("play-button").emit("click");assert.equal(byId("play-button").getAttribute("aria-pressed"),"true");
+    clock=1000;scheduled();assert.equal(Number(byId("time-slider").value),.125);
+    byId("speed-slider").value="0.8";byId("speed-slider").emit("input");
+    byId("observer-frame").value="moving";byId("observer-frame").emit("change");
+    byId("reset-button").emit("click");
+    assert.equal(byId("play-button").getAttribute("aria-pressed"),"false");assert.equal(scheduled,undefined);
+    assert.equal(Number(byId("time-slider").value),0);assert.equal(Number(byId("speed-slider").value),.6);assert.equal(byId("observer-frame").value,"lab");
     const rows=buildSceneData("minkowski",{time:0,beta:.6,observerFrame:"lab"});
     byId("sample-number").value="2";byId("inspect-sample").emit("click");
     assert.equal(byId("selection-readout").textContent,describeSample(rows,2));
@@ -61,6 +69,15 @@ test("application fallback supports keyboard sample inspection and scene changes
     assert.match(byId("selection-readout").textContent,/Choose a sample/);
     const buttons=byId("scene-list").querySelectorAll("button");buttons.find(button=>button.dataset.scene==="twins").emit("click");
     assert.equal(locationStub.hash,"#twins");assert.match(byId("scene-title").textContent,/Twin/);
+    let skipDefaultPrevented=false;
+    byId("skip-to-scene").emit("click",{preventDefault(){skipDefaultPrevented=true;}});
+    assert.equal(skipDefaultPrevented,true);assert.equal(locationStub.hash,"#twins");
+    assert.equal(byId("scene").focused,true);assert.equal(byId("scene").scrolledIntoView,true);
+    locationStub.hash="#scene";windowStub.emit("hashchange");
+    assert.match(byId("scene-title").textContent,/Twin/);
+    locationStub.hash="#particle";windowStub.emit("hashchange");
+    assert.equal(byId("scene-title").textContent,scenes.find(scene=>scene.id==="particle").title);
+    buttons.find(button=>button.dataset.scene==="twins").emit("click");
     const twinRows=buildSceneData("twins",{time:0,beta:.6,observerFrame:"lab"});
     byId("sample-number").value="1";byId("inspect-sample").emit("click");
     assert.equal(byId("selection-readout").textContent,describeSample(twinRows,1));
@@ -224,6 +241,15 @@ test("application mounts local Three.js and OrbitControls with a simulated rende
     byId("time-slider").value="0.5";byId("time-slider").emit("input");
     const marker=renderer.scene.getObjectByName("minkowski-selected-event-1");
     assert.ok(Math.abs(marker.position.x)<1e-12&&Math.abs(marker.position.y)<1e-12);
+    byId("observer-frame").value="moving";byId("observer-frame").emit("change");
+    byId("speed-slider").value="0.8";byId("speed-slider").emit("input");
+    byId("play-button").emit("click");assert.equal(byId("play-button").getAttribute("aria-pressed"),"true");
+    byId("reset-button").emit("click");
+    assert.equal(byId("play-button").getAttribute("aria-pressed"),"false");
+    assert.equal(Number(byId("time-slider").value),0);assert.equal(Number(byId("speed-slider").value),.6);assert.equal(byId("observer-frame").value,"lab");
+    assert.ok(renderer.camera.position.distanceTo(original)<1e-12);
+    const resetMarker=renderer.scene.getObjectByName("minkowski-selected-event-1"),expectedReset=selectedWorldlineEvents("minkowski",.6,0,"lab")[1];
+    assert.ok(Math.abs(resetMarker.position.x-expectedReset.x)<1e-12&&Math.abs(resetMarker.position.y-expectedReset.y)<1e-12);
     byId("scene-list").querySelectorAll("button").find(button=>button.dataset.scene==="particle").emit("click");
     assert.ok(renderer.scene.getObjectByName("particle-selected-endpoint-0"));
     for(const model of scenes){

@@ -463,6 +463,16 @@ test("retarded fields avoid overflowing root midpoints and reject non-finite res
   assert.throws(()=>new RetardedField(source,stationary,1,0,{c:.5,epsilon0:1}).retardedTime([1e308,1,0,0]),/observation time/);
   assert.throws(()=>new RetardedField(source,stationary,1e308,0,{c:1,epsilon0:1}).retardedPotential([1,1e-13,0,0]),/non-finite/);
 });
+test("retarded potential matches an oblique uniformly moving point charge",()=>{
+  for(const beta of [-.6,0,.6]){
+    const field=new RetardedField(t=>[beta*t,0,0],()=>[beta,0,0],1,Math.abs(beta),{c:1,epsilon0:1,tolerance:1e-13});
+    const event=[0,0,1,0],gamma=1/Math.sqrt(1-beta*beta),time=field.retardedTime(event),potential=field.retardedPotential(event);
+    assert.ok(Math.abs(time+gamma)<1e-12);
+    assert.ok(Math.abs(potential[0]-gamma/(4*Math.PI))<1e-12);
+    assert.ok(Math.abs(potential[1]-beta*gamma/(4*Math.PI))<1e-12);
+    assert.deepEqual(potential.slice(2),[0,0]);
+  }
+});
 test("retarded point-charge potential matches Lib4 and rejects invalid trajectories",()=>{
   const rf=new RetardedField(()=>[0,0,0],()=>[0,0,0],1,0,{c:1,epsilon0:1,tolerance:1e-10});
   const event=[3,2,0,0],potential=rf.retardedPotential(event);

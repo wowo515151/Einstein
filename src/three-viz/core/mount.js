@@ -455,6 +455,12 @@ export async function createViewerWithRuntime(container, definition, runtime) {
       },
       resetView() {
         ensureAlive();
+        // Consume any pending damping delta before restoring the saved pose.
+        // Otherwise the next render moves the camera away from the reset view.
+        if (activeControls?.enableDamping) {
+          activeControls.enableDamping = false;
+          try { activeControls.update(); } finally { activeControls.enableDamping = true; }
+        }
         const reset = resetStates.get(activeMode);
         activeCamera.position.copy(reset.position);
         activeCamera.up.copy(reset.up);
