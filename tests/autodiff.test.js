@@ -280,3 +280,15 @@ test("forward endpoint sensitivities preserve bounded geodesic batches",()=>{
   const oversized=Array.from({length:1639},()=>[0,0,0,0]),oversizedVelocity=Array.from({length:1639},()=>[1,0,0,0]);
   assert.throws(()=>new Geodesic4(connection,oversized,oversizedVelocity).endpointSensitivityForward([0,1],{steps:1}),/component or work limit/);
 });
+
+
+test("forward geodesic sensitivities can differentiate the initial event",()=>{
+  const metric=p=>[[-1,p[2],0,0],[p[2],1,0,0],[0,0,1,0],[0,0,0,1]],connection=new Connection4(metric,{metricDerivative:"forward"}),initial=[0,.1,.3,0],velocity=[1,.2,.1,.05],steps=24,span=[0,.4],geodesic=new Geodesic4(connection,initial,velocity),result=geodesic.endpointSensitivityForward(span,{steps,withRespectTo:"initialEvent"}),h=1e-5;
+  for(let column=0;column<4;column++){
+    const plus=initial.slice(),minus=initial.slice();plus[column]+=h;minus[column]-=h;
+    const end=x=>new Geodesic4(connection,x,velocity).integrate(span,{steps}).at(-1),p=end(plus),m=end(minus);
+    for(let row=0;row<4;row++){assert.ok(Math.abs(result.jacobian[row][column]-(p.event.position[row]-m.event.position[row])/(2*h))<1e-8);assert.ok(Math.abs(result.tangentJacobian[row][column]-(p.tangent[row]-m.tangent[row])/(2*h))<1e-8);}
+  }
+  const batched=new Geodesic4(connection,[initial,initial],[velocity,velocity]).endpointSensitivityForward(span,{steps,withRespectTo:"initialEvent"});assert.deepEqual(batched.jacobian,[result.jacobian,result.jacobian]);
+  assert.throws(()=>geodesic.endpointSensitivityForward(span,{withRespectTo:"unknown"}),/withRespectTo/);
+});

@@ -63,7 +63,7 @@ This path supports bounded rectangular second derivatives, scalar wave operators
 | --- | --- |
 | `new Geodesic4(connection,initialEvent,initialTangent)` | An initial-value geodesic; event and tangent batches must match. |
 | `geodesic.integrate(span,{steps,format})` | Sample records by default, or `[parameters,events,tangents]` for `format:"components"`. |
-| `geodesic.endpointSensitivityForward(span,{steps})` | Endpoint, final tangent, and 4×4 derivatives of both with respect to the initial tangent (`jacobian` and `tangentJacobian`), from variational equations and a forward `Connection4` metric. |
+| `geodesic.endpointSensitivityForward(span,{steps,withRespectTo})` | Endpoint, final tangent, and their 4×4 derivatives (`jacobian` and `tangentJacobian`) with respect to the initial tangent by default or initial event when `withRespectTo:"initialEvent"`, from variational equations and a forward `Connection4` metric. |
 | `geodesic.solveBoundary(target,span,{steps,maxIterations,tolerance,damping,format,jacobianMethod})` | A shot trajectory to the target, or an error if it does not converge. Set `jacobianMethod:"forward"` for variational endpoint sensitivities; component format also returns the fitted initial tangent. |
 
 See the runnable [flat-space geodesic example](examples.md#geodesic-initial-value-problem) before adapting it to a curved metric. Validate a chosen step size and integration resolution for the metric and path in use.

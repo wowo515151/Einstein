@@ -287,20 +287,21 @@ export class Geodesic4 {
     if(!(this.connection instanceof Connection4)||this.connection.metricDerivative!=="forward")throw new TypeError("forward endpoint sensitivity requires a Connection4 configured with metricDerivative forward");
     for(const name of ["christoffel","christoffelForward","_christoffelForwardScalar","geodesicAcceleration"])if(this.connection[name]!==Connection4.prototype[name])throw new TypeError("forward endpoint sensitivity requires the standard metric connection");
   }
-  /** Endpoint and its derivative with respect to the initial tangent. */
-  endpointSensitivityForward(span,{steps=100}={}){
+  /** Endpoint and its derivative with respect to an initial event or tangent. */
+  endpointSensitivityForward(span,{steps=100,withRespectTo="initialTangent"}={}){
     this._validateForwardSensitivityConnection();
+    if(!["initialTangent","initialEvent"].includes(withRespectTo))throw new TypeError("withRespectTo must be initialTangent or initialEvent");
     if(!Number.isInteger(steps)||steps<1||steps>2000)throw new RangeError("endpoint sensitivity steps must be an integer from 1 to 2000");
     const event=parseGeometryBatch(this.initialEvent,"initial event",[4]),tangent=parseGeometryBatch(this.initialTangent,"initial tangent",[4]);
     if(JSON.stringify(event.shape)!==JSON.stringify(tangent.shape))throw new RangeError("initial_event and initial_tangent must have matching (...,4) shapes");
     const batchShape=event.shape.slice(0,-1),count=batchShape.reduce((product,size)=>product*size,1);
     if(count*40>MAX_COVARIANT_COMPONENTS||count*steps>12_000)throw new RangeError("endpoint sensitivity batch exceeds the bounded component or work limit");
     if(batchShape.length){
-      const values=geometryBuildBatch(batchShape,index=>new Geodesic4(this.connection,geometryBatchGet(event.data,batchShape,index,batchShape),geometryBatchGet(tangent.data,batchShape,index,batchShape)).endpointSensitivityForward(span,{steps}));
+      const values=geometryBuildBatch(batchShape,index=>new Geodesic4(this.connection,geometryBatchGet(event.data,batchShape,index,batchShape),geometryBatchGet(tangent.data,batchShape,index,batchShape)).endpointSensitivityForward(span,{steps,withRespectTo}));
       const project=(node,depth,key)=>depth===batchShape.length?node[key]:node.map(child=>project(child,depth+1,key));
       return {event:project(values,0,"event"),tangent:project(values,0,"tangent"),jacobian:project(values,0,"jacobian"),tangentJacobian:project(values,0,"tangentJacobian")};
     }
-    const interval=vector(span,2,"parameter span"),initial=[...event.data,...tangent.data,...Array(16).fill(0),...identity(4).flat()];
+    const interval=vector(span,2,"parameter span"),initialEventDerivative=withRespectTo==="initialEvent"?identity(4).flat():Array(16).fill(0),initialTangentDerivative=withRespectTo==="initialTangent"?identity(4).flat():Array(16).fill(0),initial=[...event.data,...tangent.data,...initialEventDerivative,...initialTangentDerivative];
     const rows=integrateRK4((_parameter,state)=>{
       const position=state.slice(0,4),velocity=state.slice(4,8),S=Array.from({length:4},(_,i)=>state.slice(8+4*i,12+4*i)),T=Array.from({length:4},(_,i)=>state.slice(24+4*i,28+4*i));
       const {gamma,derivative}=forwardConnectionDerivatives(this.connection.metric,position),acceleration=Array(4).fill(0),change=zeros(4);
