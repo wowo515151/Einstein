@@ -50,7 +50,7 @@
         <fieldset class="controls" id="controls">
           <legend>Scene controls</legend>
           <label class="parameter-control" for="sample-number"><span>Sample number</span><input id="sample-number" type="number" min="1" value="1" step="1" aria-describedby="sample-hint"></label>
-          <p id="sample-hint" class="hint">Choose a sample number, then inspect it. Inspection pauses animation.</p>
+          <p id="sample-hint" class="hint">Enter a plotted sample number and inspect it to read its display coordinates and available physical values. Inspection pauses animation.</p>
           <div><button id="inspect-sample" type="button">Inspect sample</button></div>
           <label class="time-control" for="time-slider"><span>Time</span><output id="time-output" for="time-slider" aria-live="off">0.00</output></label>
           <input id="time-slider" type="range" min="0" max="1" value="0" step="0.01" aria-describedby="time-hint">
@@ -85,7 +85,7 @@
       </ul>
     </section>
   </main>
-  <footer><p>Local demonstration · Three.js r128 and OrbitControls are MIT licensed; see <a href="./vendor/THREE-LICENSE.txt">the dependency license</a>. No analytics, remote scripts, or data collection.</p></footer>
+  <footer><p>Local demonstration · Three.js r128 and OrbitControls are MIT licensed; see <a href="./vendor/THREE-LICENSE.txt">the dependency license</a>. No analytics, remote scripts, or data collection.</p><p>Built by <a href="https://Executive51.biz">Executive51.biz</a>.</p></footer>
   <script src="./vendor/three-r128.min.js"></script>
   <script src="./vendor/OrbitControls-r128.js"></script>
   <script>
