@@ -1,4 +1,5 @@
-import {ETA, add, sub, scale, dot, cross, matrix, vector, zeros, identity, transpose, mmul, mvec, determinant, determinantRoot, inverse, minkowskiDot, weightedDot4, metricDot4, finiteNumber} from "./array.js";
+import {weightedDot4, metricDot4} from "./weighted-dot-internal.js";
+import {ETA, add, sub, scale, dot, cross, matrix, vector, zeros, identity, transpose, mmul, mvec, determinant, determinantRoot, inverse, minkowskiDot, finiteNumber} from "./array.js";
 
 const MAX_ALGEBRA_COMPONENTS=1_000_000;
 function tensorData(value,name,trailingShape,maxRank=8){

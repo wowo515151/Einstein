@@ -1,4 +1,5 @@
-import {C, add, sub, scale, dot, norm, vector, matrix, mvec, mmul, transpose, inverse, minkowskiDot, weightedDot4, identity, zeros, finiteNumber} from "./array.js";
+import {weightedDot4} from "./weighted-dot-internal.js";
+import {C, add, sub, scale, dot, norm, vector, matrix, mvec, mmul, transpose, inverse, minkowskiDot, identity, zeros, finiteNumber} from "./array.js";
 import {Vector4, Metric4, LorentzTransform, PoincareTransform} from "./algebra.js";
 
 const MAX_INTEGRATION_STEPS=10_000;
@@ -125,8 +126,7 @@ export function integrateRK4(rhs,initialState,start,end,steps){
   if(!Number.isInteger(steps)||steps<1||steps>MAX_INTEGRATION_STEPS)throw new RangeError(`steps must be an integer from 1 to ${MAX_INTEGRATION_STEPS}`);
   if(typeof rhs!=="function")throw new TypeError("rhs must be a function");
   if(!Number.isFinite(start)||!Number.isFinite(end))throw new RangeError("integration bounds must be finite");
-  if(!Array.isArray(initialState)&&!ArrayBuffer.isView(initialState))throw new TypeError("initialState must be a numeric array");
-  const parsed=parseNumericTree(initialState,"initialState");if(!parsed.shape.length)throw new RangeError("initialState must be a numeric array");
+  const parsed=parseNumericTree(initialState,"initialState");
   const components=product(parsed.shape),resultComponents=(steps+1)*components;if(!Number.isSafeInteger(resultComponents)||resultComponents>MAX_INTEGRATION_COMPONENTS)throw new RangeError("integration result exceeds the bounded component limit");
   const h=(end-start)/steps;if(!Number.isFinite(h))throw new RangeError("integration step size must be finite");
   const times=[start];

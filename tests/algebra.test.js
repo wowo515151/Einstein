@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {Vector4,Covector4,Matrix4,Metric4,Tensor4,Bivector4,LeviCivita4,LorentzTransform,PoincareTransform,minkowskiDot,fromThreeVector3,toThreeVector3,fromThreeVector4,toThreeVector4,fromThreeMatrix4,toThreeMatrix4} from "../src/relativity/index.js";
+import * as publicApi from "../src/relativity/index.js";
+
+test("public entry point exposes validated products without internal primitives",()=>{
+  assert.equal(typeof publicApi.minkowskiDot,"function");
+  assert.equal("weightedDot4" in publicApi,false);
+  assert.equal("metricDot4" in publicApi,false);
+});
 
 test("algebra inputs reject sparse components and sparse batches",()=>{
   const vector=[1,2,3,4];delete vector[2];

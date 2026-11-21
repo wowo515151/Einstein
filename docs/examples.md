@@ -86,6 +86,16 @@ const samples = path.integrate([0, 1], { steps: 10 });
 console.log(samples.at(-1).event.position); // approximately [1, 0.5, 0, 0]
 ```
 
+## Scalar RK4 integration
+
+The generic integrator accepts scalar state as well as rectangular arrays. Its records include the initial and final parameters.
+
+```js
+import { integrateRK4 } from "../src/relativity/index.js";
+const solution = integrateRK4((_t, value) => value, 1, 0, 1, 20);
+console.log(solution.at(-1)); // approximately [1, Math.E]
+```
+
 ## Maxwell evolution and residuals
 
 This uniform field is unchanged by the periodic vacuum update. The grid shape is `[Nx,Ny,Nz,3]`; each dimension must contain at least two cells. Magnetic history uses half timesteps. See [Physics and fields](physics.md) for the CFL condition, current grids, and constraint residuals.

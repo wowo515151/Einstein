@@ -339,6 +339,15 @@ test("RK4 integrates exponential growth and ODE worldline constant motion",()=>{
   assert.throws(()=>new ODEWorldline([0,0,0,0],[1,0,0,0]),TypeError);
   assert.throws(()=>integrateRK4(()=>[0],[0],0,1,10001),RangeError);
 });
+test("RK4 integrates scalar states and checks derivative shape",()=>{
+  const forward=integrateRK4((_t,y)=>y,1,0,1,20);
+  assert.equal(typeof forward[0][1],"number");
+  assert.ok(Math.abs(forward.at(-1)[1]-Math.E)<1e-6);
+  const backward=integrateRK4((_t,y)=>y,Math.E,1,0,20);
+  assert.ok(Math.abs(backward.at(-1)[1]-1)<1e-6);
+  assert.throws(()=>integrateRK4(()=>[1],1,0,1,1),/rhs result shape/);
+  assert.throws(()=>integrateRK4(()=>1,NaN,0,1,1),/finite/);
+});
 test("RK4 avoids overflowing an intermediate weighted derivative sum",()=>{
   const rows=integrateRK4(()=>[1e308],[0],0,1e-308,1);
   assert.equal(rows.length,2);
