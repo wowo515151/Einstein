@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
 const docs = new URL("../docs/", import.meta.url);
-const generatorHash = createHash("sha256").update(await readFile(new URL(import.meta.url))).digest("hex");
+const normalizeLineEndings = text => text.replaceAll("\r\n", "\n");
+const generatorHash = createHash("sha256").update(normalizeLineEndings(await readFile(new URL(import.meta.url), "utf8"))).digest("hex");
 const escape = text => text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 function inline(text) {
   text = text.replaceAll("\\|", "|");
@@ -55,6 +56,7 @@ function render(markdown) {
   return out.join("\n");
 }
 export function generatePage(name, markdown) {
+  markdown = normalizeLineEndings(markdown);
   const title = /^# (.+)$/m.exec(markdown)?.[1] ?? name;
   const sourceHash = createHash("sha256").update(markdown).digest("hex");
   return `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="source-sha256" content="${sourceHash}"><meta name="generator-sha256" content="${generatorHash}"><title>${escape(title)}</title><link rel="stylesheet" href="help.css"></head><body><nav><a href="README.html">Help index</a> · <a href="../index.html">Visualizations</a></nav><main>${render(markdown)}</main></body></html>\n`;

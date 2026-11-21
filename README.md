@@ -6,7 +6,7 @@ An offline-first JavaScript library and set of interactive 3D demonstrations for
 
 Start at the [help index](docs/README.md) for conventions, API references, equation references, GPU behavior, examples, visualizations, and limitations.
 
-For a static site, use the [HTML help index](docs/README.html). After editing Markdown help, regenerate its HTML with `node scripts/build-help.mjs`.
+For a static site, use the [HTML help index](docs/README.html). After editing Markdown help, regenerate its HTML with `node scripts/build-help.mjs`. Help fingerprints normalize CRLF to LF so Windows and Git line endings produce the same pages.
 
 The current local [development-time estimate](DEVELOPMENT_TIME.md) is provisional and will be updated before delivery.
 
