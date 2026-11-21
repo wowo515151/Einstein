@@ -268,3 +268,12 @@ test("forward endpoint sensitivity requires the same standard forward connection
   const custom=new Connection4(flat,{metricDerivative:"forward"});custom.geodesicAcceleration=()=>[0,0,0,0];
   assert.throws(()=>new Geodesic4(custom,event,tangent).endpointSensitivityForward([0,1]),/standard metric connection/);
 });
+
+
+test("forward endpoint sensitivities preserve bounded geodesic batches",()=>{
+  const flat=()=>[[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],connection=new Connection4(flat,{metricDerivative:"forward"}),events=[[[0,0,0,0],[1,0,0,0]]],tangents=[[[1,.1,0,0],[1,.2,0,0]]],span=[0,2];
+  const result=new Geodesic4(connection,events,tangents).endpointSensitivityForward(span,{steps:4});
+  for(let i=0;i<2;i++){const scalar=new Geodesic4(connection,events[0][i],tangents[0][i]).endpointSensitivityForward(span,{steps:4});assert.deepEqual(result.event[0][i],scalar.event);assert.deepEqual(result.tangent[0][i],scalar.tangent);assert.deepEqual(result.jacobian[0][i],scalar.jacobian);}
+  const points=Array.from({length:7},()=>[0,0,0,0]),velocities=Array.from({length:7},()=>[1,0,0,0]);
+  assert.throws(()=>new Geodesic4(connection,points,velocities).endpointSensitivityForward([0,1],{steps:2000}),/work limit/);
+});

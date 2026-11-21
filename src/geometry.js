@@ -289,10 +289,18 @@ export class Geodesic4 {
   }
   /** Endpoint and its derivative with respect to the initial tangent. */
   endpointSensitivityForward(span,{steps=100}={}){
-    if(this.initialEvent.length!==4||this.initialTangent.length!==4||this.initialEvent.some(Array.isArray)||this.initialTangent.some(Array.isArray))throw new RangeError("endpoint sensitivity requires unbatched four-vectors");
     this._validateForwardSensitivityConnection();
     if(!Number.isInteger(steps)||steps<1||steps>2000)throw new RangeError("endpoint sensitivity steps must be an integer from 1 to 2000");
-    const interval=vector(span,2,"parameter span"),initial=[...this.initialEvent,...this.initialTangent,...Array(16).fill(0),...identity(4).flat()];
+    const event=parseGeometryBatch(this.initialEvent,"initial event",[4]),tangent=parseGeometryBatch(this.initialTangent,"initial tangent",[4]);
+    if(JSON.stringify(event.shape)!==JSON.stringify(tangent.shape))throw new RangeError("initial_event and initial_tangent must have matching (...,4) shapes");
+    const batchShape=event.shape.slice(0,-1),count=batchShape.reduce((product,size)=>product*size,1);
+    if(count*24>MAX_COVARIANT_COMPONENTS||count*steps>12_000)throw new RangeError("endpoint sensitivity batch exceeds the bounded component or work limit");
+    if(batchShape.length){
+      const values=geometryBuildBatch(batchShape,index=>new Geodesic4(this.connection,geometryBatchGet(event.data,batchShape,index,batchShape),geometryBatchGet(tangent.data,batchShape,index,batchShape)).endpointSensitivityForward(span,{steps}));
+      const project=(node,depth,key)=>depth===batchShape.length?node[key]:node.map(child=>project(child,depth+1,key));
+      return {event:project(values,0,"event"),tangent:project(values,0,"tangent"),jacobian:project(values,0,"jacobian")};
+    }
+    const interval=vector(span,2,"parameter span"),initial=[...event.data,...tangent.data,...Array(16).fill(0),...identity(4).flat()];
     const rows=integrateRK4((_parameter,state)=>{
       const position=state.slice(0,4),velocity=state.slice(4,8),S=Array.from({length:4},(_,i)=>state.slice(8+4*i,12+4*i)),T=Array.from({length:4},(_,i)=>state.slice(24+4*i,28+4*i));
       const {gamma,derivative}=forwardConnectionDerivatives(this.connection.metric,position),acceleration=Array(4).fill(0),change=zeros(4);
