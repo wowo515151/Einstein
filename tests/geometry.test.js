@@ -296,6 +296,11 @@ test("parallel transport uses RK4 and returns the value at every path point",()=
   assert.throws(()=>geo.solveBoundary([1,0,0,0],[0,1],{iterations:13}),RangeError);
   assert.throws(()=>geo.solveBoundary([1,0,0,0],[0,1],{steps:2001}),RangeError);
 });
+test("connection is metric-compatible for a varying off-diagonal metric",()=>{
+  const metric=x=>[[-1,.1*x[2],0,0],[.1*x[2],1+.2*x[0],0,0],[0,0,1+.1*x[1],0],[0,0,0,1]],points=[[.2,.3,.4,0],[-.1,.1,-.2,.3]],connection=new Connection4(metric,{step:1e-4});
+  const covariant=connection.covariantDerivative(metric,points,["down","down"]),contravariant=connection.covariantDerivative(x=>new Metric4(metric(x)).inverseComponents,points,["up","up"]);
+  for(const value of [...covariant.flat(3),...contravariant.flat(3)])assert.ok(Math.abs(value)<1e-8);
+});
 test("curved parallel transport preserves the metric norm and reverses along the path",()=>{
   const metric=x=>[[-1,0,0,0],[0,(1+x[0])**2,0,0],[0,0,1,0],[0,0,0,1]],connection=new Connection4(metric);
   const path=[[0,0,0,0],[.5,0,0,0],[1,0,0,0]],initial=[1,2,.5,0];
