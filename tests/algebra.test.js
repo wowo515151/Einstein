@@ -413,6 +413,13 @@ test("mixed tensor contraction and index symmetries behave correctly",()=>{
   assert.deepEqual(symmetric.antisymmetrize().indexTypes,["down","down"]);
 });
 
+test("mixed rank-three tensors preserve contraction under a non-orthogonal basis change",()=>{
+  const vector=[1,2,3,4],components=Array.from({length:4},(_,i)=>Array.from({length:4},(_,j)=>vector.map(value=>i===j?value:0)));
+  const tensor=new Tensor4(components,["up","down","up"]),shear=[[1,1,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
+  const transformed=tensor.transform(shear),expectedVector=[3,2,3,4];
+  for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)assert.equal(transformed.components[i][j][k],i===j?expectedVector[k]:0);
+  assert.deepEqual(transformed.contract(0,1).components,expectedVector.map(value=>4*value));
+});
 test("non-scalar tensor contraction preserves remaining axes and variance",()=>{
   const components=Array.from({length:4},(_,i)=>Array.from({length:4},(_,j)=>Array.from({length:4},(_,k)=>(i===j?k+1:0))));
   const contracted=new Tensor4(components,["up","down","up"]).contract(0,1);

@@ -9,8 +9,7 @@ Each callback accepts a single four-coordinate array. The position argument `x` 
 | Call | Returns |
 | --- | --- |
 | `new DifferentialOperators4(metric,{step})` | An operator set. The metric may be a function, a constant matrix, or omitted for Minkowski; `step` defaults to `1e-5`. |
-| `ops.partial(scalarField,x)` | Four partial derivatives of a scalar field. |
-| `ops.jacobian(field,x)` | Derivatives of a scalar or tensor-valued field, with a final axis of four coordinate derivatives. |
+| `ops.partial(field,x)`, `ops.jacobian(field,x)` | Derivatives of a scalar or rectangular array-valued field, with a final axis of four coordinate derivatives. Output arrays must be finite, nonempty, acyclic, and rank eight or less, subject to the work and component bounds. |
 | `ops.gradient(scalarField,x)` | A metric-raised four-component gradient. |
 | `ops.divergence(vectorField,x)` | The covariant divergence as a number or batch. |
 | `ops.exteriorDerivative(form,x)` | Components of the exterior derivative of a covariant form. |

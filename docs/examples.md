@@ -86,6 +86,17 @@ const samples = path.integrate([0, 1], { steps: 10 });
 console.log(samples.at(-1).event.position); // approximately [1, 0.5, 0, 0]
 ```
 
+## Rectangular field derivatives
+
+The derivative axis is last even when the field has fewer than four output components.
+
+```js
+import { DifferentialOperators4 } from "../src/relativity/index.js";
+const operators = new DifferentialOperators4(null, { step: 1e-4 });
+const derivative = operators.jacobian(x => [x[0] + x[1], x[2] * x[3]], [1, 2, 3, 4]);
+console.log(derivative); // approximately [[1,1,0,0], [0,0,4,3]]
+```
+
 ## Scalar RK4 integration
 
 The generic integrator accepts scalar state as well as rectangular arrays. Its records include the initial and final parameters.

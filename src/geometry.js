@@ -19,13 +19,15 @@ function tensorValue(value,indices){return indices.reduce((current,index)=>curre
 function setTensorValue(value,indices,next){let target=value;for(const index of indices.slice(0,-1))target=target[index];target[indices.at(-1)]=next;}
 function zeroTensor(shape){if(!shape.length)return 0;return Array.from({length:shape[0]},()=>zeroTensor(shape.slice(1)));}
 function numericTreeShape(value){if(!Array.isArray(value))return [];if(!value.length)throw new RangeError("batch dimensions must be nonempty");const childShape=numericTreeShape(value[0]);for(let index=1;index<value.length;index++)if(JSON.stringify(numericTreeShape(value[index]))!==JSON.stringify(childShape))throw new RangeError("field outputs must be rectangular across batch samples");return [value.length,...childShape];}
+function fieldOutputShape(value){const active=new Set();let leaves=0;function visit(node,depth){if(typeof node==="number"){if(!Number.isFinite(node))throw new TypeError(depth===0?"scalar field samples must be finite":"field samples must be finite");if(++leaves>MAX_COVARIANT_COMPONENTS)throw new RangeError("field output exceeds the bounded component limit");return [];}if(!Array.isArray(node)||!node.length)throw new RangeError("field output must be a nonempty rectangular numeric array or scalar");if(depth>=8)throw new RangeError("field output rank exceeds eight");if(node.length>MAX_COVARIANT_COMPONENTS)throw new RangeError("field output exceeds the bounded component limit");if(active.has(node))throw new RangeError("field output cannot be cyclic");active.add(node);try{const first=visit(node[0],depth+1);for(let i=1;i<node.length;i++)if(JSON.stringify(visit(node[i],depth+1))!==JSON.stringify(first))throw new RangeError("field output must be rectangular");return [node.length,...first];}finally{active.delete(node);}}return visit(value,0);}
 function eachIndex(rank,visit,prefix=[]){if(prefix.length===rank){visit(prefix);return;}for(let i=0;i<4;i++)eachIndex(rank,visit,[...prefix,i]);}
+function eachShapeIndex(shape,visit,prefix=[]){if(prefix.length===shape.length){visit(prefix);return;}for(let i=0;i<shape[prefix.length];i++)eachShapeIndex(shape,visit,[...prefix,i]);}
 
 export class DifferentialOperators4 {
   constructor(metric=null,{step=1e-5}={}){this.metric=metric;this.step=validateDifferenceStep(step);this.connection=new Connection4(x=>this._g(x),{step:this.step});}
   _g(x){const g=typeof this.metric==="function"?this.metric(x):(this.metric??new Metric4().components);return g instanceof Metric4?g.components:matrix(g);}
   _mapPoints(x,operation,workPerPoint=1){const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),batchCount=batchShape.reduce((count,size)=>count*size,1),firstIndex=Array(batchShape.length).fill(0);if(typeof workPerPoint==="number"&&batchCount*workPerPoint>MAX_DIFFERENTIAL_BATCH_WORK)throw new RangeError("differential-operator batch exceeds the bounded work limit");const firstPoint=geometryBatchGet(parsed.data,batchShape,firstIndex,batchShape),firstValue=operation(firstPoint),shape=numericTreeShape(firstValue),components=shape.reduce((count,size)=>count*size,1);if(batchCount*components>MAX_COVARIANT_COMPONENTS)throw new RangeError("differential-operator batch exceeds the bounded component limit");if(typeof workPerPoint==="function"&&batchCount*workPerPoint(firstValue,components)>MAX_DIFFERENTIAL_BATCH_WORK)throw new RangeError("differential-operator batch exceeds the bounded work limit");if(!batchShape.length)return firstValue;return geometryBuildBatch(batchShape,index=>{if(index.every((value,axis)=>value===firstIndex[axis]))return firstValue;const result=operation(geometryBatchGet(parsed.data,batchShape,index,batchShape));if(JSON.stringify(numericTreeShape(result))!==JSON.stringify(shape))throw new RangeError("field result shape must remain constant across batch samples");return result;});}
-  partial(fn,x){return this._mapPoints(x,p=>this._partialScalar(fn,p),8);}
+  partial(fn,x){return this._mapPoints(x,p=>this._jacobianScalar(fn,p),(_value,components)=>3*components);}
   _partialScalar(fn,p){return Array.from({length:4},(_,i)=>partial(fn,p,i,this.step));}
   jacobian(fn,x){return this._mapPoints(x,p=>this._jacobianScalar(fn,p),(_value,components)=>3*components);}
   _jacobianScalar(fn,p){
@@ -33,14 +35,14 @@ export class DifferentialOperators4 {
     const derivatives=Array.from({length:4},(_,axis)=>{
       const {plus:plusPoint,minus:minusPoint,span}=differenceStencil(p,axis,this.step);
       const plus=fn(plusPoint),minus=fn(minusPoint);
-      const plusShape=tensorShape(plus),minusShape=tensorShape(minus);
+      const plusShape=fieldOutputShape(plus),minusShape=fieldOutputShape(minus);
       if(JSON.stringify(plusShape)!==JSON.stringify(minusShape)||(shape!==null&&JSON.stringify(plusShape)!==JSON.stringify(shape)))throw new RangeError("field shape must remain constant in a neighborhood");
       if(shape===null){shape=plusShape;components=shape.reduce((product,size)=>product*size,1);if(12*components>MAX_COVARIANT_COMPONENTS)throw new RangeError("Jacobian exceeds the bounded finite-difference work limit");}
       const difference=(a,b)=>Array.isArray(a)?a.map((child,i)=>difference(child,b[i])):differenceQuotient(a,b,span);
       return difference(plus,minus);
     });
-    const rank=shape.length,out=zeroTensor([...shape,4]);
-    eachIndex(rank,indices=>{for(let axis=0;axis<4;axis++)setTensorValue(out,[...indices,axis],tensorValue(derivatives[axis],indices));});
+    const out=zeroTensor([...shape,4]);
+    eachShapeIndex(shape,indices=>{for(let axis=0;axis<4;axis++)setTensorValue(out,[...indices,axis],tensorValue(derivatives[axis],indices));});
     return out;
   }
   gradient(fn,x){return this._mapPoints(x,p=>mvec(inverse(this._g(p)),this._partialScalar(fn,p)),16);}

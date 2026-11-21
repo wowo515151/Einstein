@@ -21,6 +21,25 @@ test("flat metric has zero connection and curvature",()=>{
   assert.ok(gamma.flat(2).every(x=>Math.abs(x)<1e-12));
   const curvature=new Curvature4(flat);assert.ok(curvature.ricciScalar([0,0,0,0])<1e-12);
 });
+test("pointwise derivatives support rectangular non-four-dimensional outputs",()=>{
+  const ops=new DifferentialOperators4(null,{step:1e-4}),point=[1,2,3,4];
+  const field=x=>[x[0]+x[1],x[2]*x[3]],expected=[[1,1,0,0],[0,0,4,3]];
+  for(const method of ["partial","jacobian"]){
+    const values=ops[method](field,point);
+    values.forEach((row,i)=>row.forEach((value,j)=>assert.ok(Math.abs(value-expected[i][j])<1e-9)));
+    const batched=ops[method](field,[point,[0,1,2,3]]);
+    assert.equal(batched.length,2);assert.ok(Math.abs(batched[1][1][2]-3)<1e-9);
+  }
+  const matrixField=x=>[[x[0],2*x[1],x[2]+x[3]],[3*x[0],x[2],4*x[3]]];
+  const jacobian=ops.jacobian(matrixField,point);
+  assert.equal(jacobian.length,2);assert.equal(jacobian[0].length,3);
+  assert.ok(Math.abs(jacobian[1][2][3]-4)<1e-9);
+  assert.throws(()=>ops.jacobian(()=>[[1],[1,2]],point),/rectangular/);
+  const cycle=[];cycle.push(cycle);assert.throws(()=>ops.partial(()=>cycle,point),/cyclic/);
+  let calls=0;
+  assert.throws(()=>ops.jacobian(()=>{calls++;return Array(6000).fill(1);},point),/bounded/);
+  assert.equal(calls,2);
+});
 test("finite-difference geometry rejects zero and non-finite step sizes",()=>{
   for(const step of [0,-1,NaN,Infinity]){
     assert.throws(()=>new Connection4(flat,{step}),RangeError);
