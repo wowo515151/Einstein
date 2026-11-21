@@ -99,9 +99,20 @@ export class DifferentialOperators4 {
 function LeviCivitaTensor(g){const root=-determinantRoot(g).root,symbol=(()=>{const e=zeros(4).map(()=>zeros(4).map(()=>zeros(4).map(()=>Array(4).fill(0))));for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++){const v=[a,b,c,d];if(new Set(v).size===4){let p=0;for(let i=0;i<4;i++)for(let j=i+1;j<4;j++)if(v[i]>v[j])p++;e[a][b][c][d]=p%2?-1:1;}}return e;})();return symbol.map(a=>a.map(b=>b.map(c=>c.map(v=>v*root))));}
 
 export class Connection4 {
-  constructor(metric,{step=1e-5}={}){this.metric=metric;this.step=validateDifferenceStep(step);}
+  constructor(metric,{step=1e-5,metricDerivative="finite"}={}){if(!["finite","forward"].includes(metricDerivative))throw new TypeError("metricDerivative must be finite or forward");this.metric=metric;this.step=validateDifferenceStep(step);this.metricDerivative=metricDerivative;}
   _g(x){const g=this.metric(x);return geometryMetric(g);}
-  christoffel(x){const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),components=batchShape.reduce((count,size)=>count*size,1)*64;if(components>MAX_COVARIANT_COMPONENTS)throw new RangeError("Christoffel batch exceeds the component limit");return geometryBuildBatch(batchShape,index=>this._christoffelScalar(geometryBatchGet(parsed.data,batchShape,index,batchShape)));}
+  christoffel(x){if(this.metricDerivative==="forward")return this.christoffelForward(x);if(this.metricDerivative!=="finite")throw new TypeError("metricDerivative must be finite or forward");const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),components=batchShape.reduce((count,size)=>count*size,1)*64;if(components>MAX_COVARIANT_COMPONENTS)throw new RangeError("Christoffel batch exceeds the component limit");return geometryBuildBatch(batchShape,index=>this._christoffelScalar(geometryBatchGet(parsed.data,batchShape,index,batchShape)));}
+  christoffelForward(x){
+    const parsed=parseGeometryBatch(x,"position",[4]),batchShape=parsed.shape.slice(0,-1),components=batchShape.reduce((count,size)=>count*size,1)*64;
+    if(components>MAX_COVARIANT_COMPONENTS)throw new RangeError("Christoffel batch exceeds the component limit");
+    return geometryBuildBatch(batchShape,index=>this._christoffelForwardScalar(geometryBatchGet(parsed.data,batchShape,index,batchShape)));
+  }
+  _christoffelForwardScalar(p){
+    const differentiated=forwardJacobian4(this.metric,p),g=geometryMetric(differentiated.value),gi=inverse(g),dg=differentiated.jacobian,out=zeros(4).map(()=>zeros(4));
+    for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)out[a][b][c]+=.5*gi[a][d]*(dg[d][c][b]+dg[d][b][c]-dg[b][c][d]);
+    if(out.some(plane=>plane.some(row=>row.some(value=>!Number.isFinite(value)))))throw new RangeError("Christoffel symbols are non-finite");
+    return out;
+  }
   _christoffelScalar(p){const g=this._g(p),gi=inverse(g),dg=Array.from({length:4},(_,k)=>{const stencil=differenceStencil(p,k,this.step);const a=this._g(stencil.plus),b=this._g(stencil.minus);return a.map((r,i)=>r.map((v,j)=>weightedStencilDerivative(v,b[i][j],g[i][j],stencil)));}),out=zeros(4).map(()=>zeros(4));for(let a=0;a<4;a++)for(let b=0;b<4;b++)for(let c=0;c<4;c++)for(let d=0;d<4;d++)out[a][b][c]+=.5*gi[a][d]*(dg[b][d][c]+dg[c][d][b]-dg[d][b][c]);if(out.some(plane=>plane.some(row=>row.some(value=>!Number.isFinite(value)))))throw new RangeError("Christoffel symbols are non-finite");return out;}
   covariantDerivativeVector(field,x){return this.covariantDerivative(field,x,["up"]);}
   covariantDerivative(field,x,indexTypes=["up"]){

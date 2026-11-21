@@ -30,14 +30,14 @@ const gradient = ops.gradientForward(field, [2, 0, 0, 0]);
 // Minkowski raised gradient: [-4, 1, 0, 0]
 ```
 
-`partialForward`, `jacobianForward`, and `gradientForward` also accept supported coordinate batches. This is an opt-in first-order API, not a general PyTorch replacement: it does not differentiate ordinary JavaScript callbacks automatically, provide higher derivatives, or supply automatic derivatives to connection, curvature, divergence, or wave-operator calculations. Accessing `.value` explicitly or branching on it can discard derivative information; use such operations only when mathematically appropriate.
+`partialForward`, `jacobianForward`, and `gradientForward` also accept supported coordinate batches. This is an opt-in first-order API, not a general PyTorch replacement: it does not differentiate ordinary JavaScript callbacks automatically, provide higher derivatives, or automatically differentiate curvature, divergence, or wave-operator calculations. `Connection4.christoffelForward` separately accepts a dual-compatible metric callback for first-order metric derivatives. Constructing a connection with `{metricDerivative:"forward"}` uses that path in its ordinary Christoffel, acceleration, covariant-derivative, parallel-transport, and geodesic workflows; derivatives of the transported or covariant field and subsequent curvature calculations are not automatically differentiated. Accessing `.value` explicitly or branching on it can discard derivative information; use such operations only when mathematically appropriate.
 
 ## Connection and curvature
 
 | Call | Returns |
 | --- | --- |
-| `new Connection4(metric,{step})` | A connection for a metric callback and optional positive finite-difference step. |
-| `connection.christoffel(x)` | Christoffel components with shape `(...,4,4,4)`; non-finite results reject. |
+| `new Connection4(metric,{step,metricDerivative})` | A connection for a metric callback; `metricDerivative` is `"finite"` by default or `"forward"` for an explicitly dual-compatible metric. |
+| `connection.christoffel(x)`, `connection.christoffelForward(x)` | Christoffel components with shape `(...,4,4,4)`; the latter differentiates an explicitly dual-compatible metric. Non-finite results reject. |
 | `connection.covariantDerivative(field,x,indexTypes)` | Field components with a final derivative axis; `indexTypes` defaults to `["up"]` and can be `[]` for a scalar. Every tensor slot must have an explicit `"up"` or `"down"` entry. Non-finite corrected derivatives reject. |
 | `connection.covariantDerivativeVector(field,x)` | The vector convenience form of the covariant derivative. |
 | `connection.geodesicAcceleration(x,tangent)` | Four acceleration components, broadcasting compatible positions and tangents; non-finite results reject. |

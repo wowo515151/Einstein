@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Dual4,forwardJacobian4,DifferentialOperators4} from "../src/relativity/index.js";
+import {Dual4,forwardJacobian4,DifferentialOperators4,Connection4,Geodesic4} from "../src/relativity/index.js";
 
 const field=x=>x[0].sin().multiply(x[1].exp()).add(x[2].pow(3).divide(x[3].pow(2).add(1)));
 function expected([t,x,y,z]){const denominator=1+z*z;return [Math.cos(t)*Math.exp(x),Math.sin(t)*Math.exp(x),3*y*y/denominator,-2*z*y**3/denominator**2];}
@@ -42,4 +42,38 @@ test("dual operations reject implicit conversion, invalid domains and malformed 
   assert.throws(()=>forwardJacobian4(()=>[[1],[1,2]],[1,2,3,4]),/rectangular/);
   const cycle=[];cycle.push(cycle);assert.throws(()=>forwardJacobian4(()=>cycle,[1,2,3,4]),/cycles/);
   assert.throws(()=>forwardJacobian4(()=>new Array(16385).fill(1),[1,2,3,4]),/component limit/);
+});
+
+
+test("forward-mode Christoffel symbols match an analytic time-varying metric",()=>{
+  const base=2**53,dualMetric=p=>[[-1,0,0,0],[0,p[0].subtract(base).multiply(.2).exp(),0,0],[0,0,1,0],[0,0,0,1]];
+  const numericMetric=p=>[[-1,0,0,0],[0,Math.exp(.2*(p[0]-base)),0,0],[0,0,1,0],[0,0,0,1]];
+  const points=[[base,0,0,0],[base+4,0,0,0]],result=new Connection4(dualMetric).christoffelForward(points);
+  for(let i=0;i<points.length;i++){const a=Math.exp(.2*(points[i][0]-base)),g=result[i];assert.ok(Math.abs(g[0][1][1]-.1*a)<1e-12);assert.ok(Math.abs(g[1][0][1]-.1)<1e-12);assert.ok(Math.abs(g[1][1][0]-.1)<1e-12);}
+  assert.throws(()=>new Connection4(numericMetric).christoffel(points[0]),/distinct finite stencil/);
+  assert.throws(()=>new Connection4(p=>[[-1,0,0,0],[0,Math.exp(p[0]),0,0],[0,0,1,0],[0,0,0,1]]).christoffelForward([0,0,0,0]),/implicitly converted/);
+  assert.throws(()=>new Connection4(()=>[[-1,0,0,0],[0,0,0,0],[0,0,1,0],[0,0,0,1]]).christoffelForward([0,0,0,0]),/singular/);
+});
+
+
+test("forward-mode connection handles a varying off-diagonal metric",()=>{
+  const metric=p=>{const a=p[0].multiply(.1).add(2),b=p[0].multiply(.2),c=p[0].multiply(.05).add(3);return [[-1,0,0,0],[0,a,b,0],[0,b,c,0],[0,0,0,1]];};
+  const connection=new Connection4(metric);for(const t of [0,1,2]){
+    const a=2+.1*t,b=.2*t,c=3+.05*t,det=a*c-b*b,g=connection.christoffelForward([t,0,0,0]);
+    const cases=[[g[0][1][1],.05],[g[0][1][2],.1],[g[0][2][2],.025],[g[1][0][1],.5*(c*.1-b*.2)/det],[g[1][0][2],.5*(c*.2-b*.05)/det],[g[2][0][1],.5*(-b*.1+a*.2)/det],[g[2][0][2],.5*(-b*.2+a*.05)/det]];
+    for(const [actual,expected] of cases)assert.ok(Math.abs(actual-expected)<1e-12);
+  }
+});
+
+
+test("forward-mode connections support acceleration and parallel transport",()=>{
+  const metric=p=>[[-1,0,0,0],[0,p[0].multiply(.2).exp(),0,0],[0,0,1,0],[0,0,0,1]],connection=new Connection4(metric,{metricDerivative:"forward"});
+  const g=connection.christoffel([0,0,0,0]);assert.ok(Math.abs(g[0][1][1]-.1)<1e-12);
+  const acceleration=connection.geodesicAcceleration([0,0,0,0],[1,.5,0,0]);assert.ok(Math.abs(acceleration[0]+.025)<1e-12);assert.ok(Math.abs(acceleration[1]+.1)<1e-12);
+  const path=[[0,0,0,0],[1,0,0,0]],transported=connection.parallelTransport([0,1,0,0],path,{stepsPerSegment:16});
+  assert.ok(Math.abs(transported.at(-1)[1]-Math.exp(-.1))<1e-9);
+  const spatialMetric=p=>[[-1,0,0,0],[0,p[1].multiply(2).exp(),0,0],[0,0,1,0],[0,0,0,1]],geo=new Geodesic4(new Connection4(spatialMetric,{metricDerivative:"forward"}),[0,0,0,0],[1,.4,0,0]);
+  const endpoint=geo.integrate([0,1],{steps:16}).at(-1);assert.ok(Math.abs(endpoint.event.position[1]-Math.log(1.4))<1e-7);assert.ok(Math.abs(endpoint.tangent[1]-.4/1.4)<1e-7);
+  assert.throws(()=>new Connection4(metric,{metricDerivative:"invalid"}),/metricDerivative/);
+  connection.metricDerivative="invalid";assert.throws(()=>connection.christoffel([0,0,0,0]),/metricDerivative/);
 });
